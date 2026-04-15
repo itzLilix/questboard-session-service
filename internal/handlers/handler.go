@@ -1,9 +1,9 @@
-package games
+package handlers
 
 import (
 	"github.com/gofiber/fiber/v3"
-	"github.com/itzLilix/QuestBoard/backend/internal/auth"
-	"github.com/itzLilix/QuestBoard/backend/internal/middleware"
+	"github.com/itzLilix/questboard-session-service/internal/middleware"
+	"github.com/rs/zerolog"
 )
 
 type Handler interface {
@@ -11,18 +11,19 @@ type Handler interface {
 }
 
 type handler struct {
-	authService auth.Service
+	rbac middleware.RBACMiddleware
+	log  zerolog.Logger
 }
 
-func NewHandler(authService auth.Service) Handler {
-	return &handler{ authService: authService}
+func NewHandler() *handler {
+	return &handler{}
 }
 
 func (h *handler) RegisterRoutes(app *fiber.App) {
 	games := app.Group("/games")
 	games.Get("/", h.getGames)
 	games.Get("/:id", h.getGameById)
-	games.Post("/", middleware.Protected(h.authService), h.createGame)
+	games.Post("/", h.rbac.Protected(), h.createGame)
 	games.Patch("/:id", h.editGame)
 	games.Delete("/:id", h.deleteGameById)
 	games.Post("/:id/join", h.addPlayerToGame)
