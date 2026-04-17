@@ -2,7 +2,7 @@ package middleware
 
 import (
 	"github.com/gofiber/fiber/v3"
-	dtos "github.com/itzLilix/questboard-shared/DTOs"
+	"github.com/itzLilix/questboard-shared/dtos"
 	"github.com/rs/zerolog"
 )
 
