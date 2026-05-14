@@ -55,13 +55,13 @@ func main() {
 	log.Info().Msg("migrations ran successfully")
 
 	tokenParser := jwt.NewParser([]byte(cfg.JWTSecret))
-	_ = middleware.NewRBACMiddleware(tokenParser, log.Logger)
+	rbacMiddleware := middleware.NewRBACMiddleware(tokenParser, log.Logger)
 
 	gameSystemsRepo := infrastructure.NewGameSystemsRepository(conn, psql)
 
 	gameSystemsUsecase := usecase.NewGameSystemsUsecase(gameSystemsRepo)
 
-	gameSystemsHandler := handlers.NewGameSystemsHandler(gameSystemsUsecase, log.Logger)
+	gameSystemsHandler := handlers.NewGameSystemsHandler(gameSystemsUsecase, log.Logger, rbacMiddleware)
 	gameSystemsHandler.RegisterRoutes(app)
 
 	log.Fatal().Err(app.Listen(":" + cfg.ServerPort)).Msg("server stopped")

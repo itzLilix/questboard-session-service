@@ -2,16 +2,25 @@ package infrastructure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/itzLilix/questboard-shared/dtos"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type gameSystemsRepository struct {
 	db   *pgxpool.Pool
 	psql sq.StatementBuilderType
+}
+
+type CreateGameSystemParams struct {
+    Slug string
+    Name string
+	IsCurated bool
+	BadgeColor *string
 }
 
 func NewGameSystemsRepository(db *pgxpool.Pool, psql sq.StatementBuilderType) *gameSystemsRepository {
@@ -39,7 +48,8 @@ func (r *gameSystemsRepository) GetCurated() ([]dtos.GameSystem, error) {
 
 	systems := make([]dtos.GameSystem, 0)
 	for rows.Next() {
-		gs, err := scanGameSystem(rows)
+		var gs dtos.GameSystem
+		err := scanGameSystem(rows, &gs)
 		if err != nil {
 			return nil, fmt.Errorf("scan curated system: %w", err)
 		}
@@ -71,7 +81,8 @@ func (r *gameSystemsRepository) Search(q string) ([]dtos.GameSystem, error) {
 
 	systems := make([]dtos.GameSystem, 0)
 	for rows.Next() {
-		gs, err := scanGameSystem(rows)
+		var gs dtos.GameSystem
+		err := scanGameSystem(rows, &gs)
 		if err != nil {
 			return nil, fmt.Errorf("scan search system: %w", err)
 		}
@@ -79,4 +90,28 @@ func (r *gameSystemsRepository) Search(q string) ([]dtos.GameSystem, error) {
 	}
 
 	return systems, nil
+}
+
+func (r *gameSystemsRepository) AddGameSystem(params *CreateGameSystemParams) (*dtos.GameSystem, error) {
+	sql, args, err := r.psql.Insert("game_systems").
+		Columns("slug", "canonical_name", "badge_color", "is_curated").
+		Values(params.Slug, params.Name, params.BadgeColor, params.IsCurated).
+		Suffix("RETURNING slug, canonical_name, COALESCE(badge_color, ''), is_curated").
+		ToSql()
+
+	if err != nil {
+		return nil, fmt.Errorf("add game system: %w", err)
+	}
+	
+	row := r.db.QueryRow(context.Background(), sql, args...)
+	gs := &dtos.GameSystem{}
+	if err := scanGameSystem(row, gs); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, ErrAlreadyExists
+		}
+		return nil, fmt.Errorf("add game system: %w", err)
+	}
+
+	return gs, nil
 }

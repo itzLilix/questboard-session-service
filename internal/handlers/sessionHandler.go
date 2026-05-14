@@ -20,35 +20,35 @@ func NewHandler() *sessionHandler {
 }
 
 func (h *sessionHandler) RegisterRoutes(app *fiber.App) {
-	games := app.Group("/sessions")
-	games.Get("/", h.getGames)
-	games.Get("/:id", h.getGameById)
-	games.Post("/", h.rbac.Protected(), h.createGame)
-	games.Patch("/:id", h.editGame)
-	games.Delete("/:id", h.deleteGameById)
-	games.Post("/:id/join", h.rbac.Protected(), h.addPlayerToGame)
+	sessions := app.Group("/sessions")
+	sessions.Get("/", h.getSessions)
+	sessions.Get("/:id", h.getSessionById)
+	sessions.Post("/", h.rbac.Protected(), h.createSession)
+	sessions.Patch("/:id", h.editSession)
+	sessions.Delete("/:id", h.deleteSessionById)
+	sessions.Post("/:id/join", h.rbac.Protected(), h.addPlayerToSession)
 }
 
-func (h *sessionHandler) getGames(c fiber.Ctx) error {
+func (h *sessionHandler) getSessions(c fiber.Ctx) error {
 	return nil;
 }
 
-func (h *sessionHandler) getGameById(c fiber.Ctx) error {
+func (h *sessionHandler) getSessionById(c fiber.Ctx) error {
 	return nil;
 }
 
-func (h *sessionHandler) createGame(c fiber.Ctx) error {
+func (h *sessionHandler) createSession(c fiber.Ctx) error {
 	return nil;
 }
 
-func (h *sessionHandler) editGame(c fiber.Ctx) error {
+func (h *sessionHandler) editSession(c fiber.Ctx) error {
 	return nil;
 }
 
-func (h *sessionHandler) deleteGameById(c fiber.Ctx) error {
+func (h *sessionHandler) deleteSessionById(c fiber.Ctx) error {
 	return nil;
 }
 
-func (h *sessionHandler) addPlayerToGame(c fiber.Ctx) error {
+func (h *sessionHandler) addPlayerToSession(c fiber.Ctx) error {
 	return nil;
 }
