@@ -7,7 +7,7 @@ CREATE TABLE session_commentaries (
     updated_at  TIMESTAMPTZ,
     is_deleted  BOOLEAN     NOT NULL DEFAULT FALSE,
     content     TEXT        NOT NULL
-)
+);
 
-CREATE INDEX idx_session_commentaries_session_id ON session_commentaries (session_id)
-CREATE INDEX idx_session_commentaries_parent_id ON session_commentaries (parent_id)
+CREATE INDEX idx_session_commentaries_session_id ON session_commentaries (session_id);
+CREATE INDEX idx_session_commentaries_parent_id ON session_commentaries (parent_id);
