@@ -13,7 +13,7 @@ require (
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
-	github.com/gosimple/slug v1.15.0 // indirect
+	github.com/gosimple/slug v1.15.0
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

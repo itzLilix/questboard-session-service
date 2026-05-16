@@ -1,0 +1,1 @@
+ALTER TABLE campaign_sessions DROP CONSTRAINT campaign_sessions_session_id_key;

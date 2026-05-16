@@ -58,11 +58,18 @@ func main() {
 	rbacMiddleware := middleware.NewRBACMiddleware(tokenParser, log.Logger)
 
 	gameSystemsRepo := infrastructure.NewGameSystemsRepository(conn, psql)
+	sessionRepo := infrastructure.NewSessionRepository(conn, psql)
+	campaignRepo := infrastructure.NewCampaignRepository(conn, psql)
 
 	gameSystemsUsecase := usecase.NewGameSystemsUsecase(gameSystemsRepo)
+	sessionUsecase := usecase.NewSessionUsecase(sessionRepo)
+	campaignUsecase := usecase.NewCampaignUsecase(campaignRepo)
+	characterUsecase := usecase.NewCharacterUsecase()
 
-	gameSystemsHandler := handlers.NewGameSystemsHandler(gameSystemsUsecase, log.Logger, rbacMiddleware)
-	gameSystemsHandler.RegisterRoutes(app)
+	handlers.NewGameSystemsHandler(gameSystemsUsecase, log.Logger, rbacMiddleware).RegisterRoutes(app)
+	handlers.NewSessionHandler(sessionUsecase, rbacMiddleware, log.Logger).RegisterRoutes(app)
+	handlers.NewCampaignHandler(campaignUsecase, rbacMiddleware, log.Logger).RegisterRoutes(app)
+	handlers.NewCharacterHandler(characterUsecase, rbacMiddleware, log.Logger).RegisterRoutes(app)
 
 	log.Fatal().Err(app.Listen(":" + cfg.ServerPort)).Msg("server stopped")
 }
