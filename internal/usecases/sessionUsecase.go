@@ -8,17 +8,18 @@ import (
 	"github.com/itzLilix/questboard-session-service/internal/entities"
 	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
 	"github.com/itzLilix/questboard-shared/dtos"
+	"github.com/rs/zerolog/log"
 )
 
 type SessionUsecase interface {
-	List(ctx context.Context, in ListSessionsInput) (dtos.Page[dtos.Session], error)
-	GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.Session, error)
+	List(ctx context.Context, in ListSessionsInput) (dtos.SessionListResponse, error)
+	GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.SessionResponse, error)
 	Create(ctx context.Context, in CreateSessionInput) (*dtos.Session, error)
 	Edit(ctx context.Context, id string, v *entities.Viewer, in EditSessionInput) (*dtos.Session, error)
 	Delete(ctx context.Context, id string, v *entities.Viewer) error
 	ChangeStatus(ctx context.Context, id string, v *entities.Viewer, status dtos.SessionStatus) (*dtos.Session, error)
 
-	ListPlayers(ctx context.Context, sessionID string, v *entities.Viewer) ([]dtos.SessionPlayer, error)
+	ListPlayers(ctx context.Context, sessionID string, v *entities.Viewer) (*dtos.SessionPlayersResponse, error)
 	Join(ctx context.Context, sessionID string, v *entities.Viewer, characterID *string) error
 	Leave(ctx context.Context, sessionID string, v *entities.Viewer) error
 	Kick(ctx context.Context, sessionID string, v *entities.Viewer, playerID string) error
@@ -36,14 +37,31 @@ type SessionUsecase interface {
 	AddComment(ctx context.Context, sessionID string, v *entities.Viewer, text string) (*dtos.SessionCommentary, error)
 	EditComment(ctx context.Context, commentID string, v *entities.Viewer, text string) (*dtos.SessionCommentary, error)
 	DeleteComment(ctx context.Context, commentID string, v *entities.Viewer) error
+
+	GetCardData(ctx context.Context, masterIDs []string) ([]dtos.SessionCardData, error)
 }
 
 type sessionUsecase struct {
-	repo SessionRepository
+	repo    SessionRepository
+	profile ProfileClient
 }
 
-func NewSessionUsecase(repo SessionRepository) SessionUsecase {
-	return &sessionUsecase{repo: repo}
+func NewSessionUsecase(repo SessionRepository, profile ProfileClient) SessionUsecase {
+	return &sessionUsecase{repo: repo, profile: profile}
+}
+
+// enrich fetches UserBrief for the given ids. On profile-service failure it
+// logs and returns an empty map — callers degrade gracefully rather than 5xx.
+func (uc *sessionUsecase) enrich(ctx context.Context, ids []string) map[string]dtos.UserBrief {
+	briefs, err := uc.profile.GetBriefs(ctx, ids)
+	if err != nil {
+		log.Error().Err(err).Strs("ids", ids).Msg("profile enrich failed; returning empty users map")
+		return map[string]dtos.UserBrief{}
+	}
+	if briefs == nil {
+		return map[string]dtos.UserBrief{}
+	}
+	return briefs
 }
 
 // --- input -----------------------------------------------------------
@@ -118,12 +136,12 @@ type UploadFileInput struct {
 
 // --- sessions -----------------------------------------------------------
 
-func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput) (dtos.Page[dtos.Session], error) {
+func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput) (dtos.SessionListResponse, error) {
 	scope := in.Scope
 	if scope == "" {
 		scope = dtos.ScopeCatalog
 	}
-
+	fmt.Println(in)
 	// resolve target user and whether it's the viewer
 	var (
 		masterID, playerID string
@@ -138,7 +156,7 @@ func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput) (dtos.
 				targetIsViewer = in.Viewer.Is(masterID)
 			} else {
 				if !in.Viewer.IsAuthenticated() {
-					return dtos.Page[dtos.Session]{}, ErrForbidden
+					return dtos.SessionListResponse{}, ErrForbidden
 				}
 				masterID = in.Viewer.UserID
 				targetIsViewer = true
@@ -149,20 +167,18 @@ func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput) (dtos.
 				targetIsViewer = in.Viewer.Is(playerID)
 			} else {
 				if !in.Viewer.IsAuthenticated() {
-					return dtos.Page[dtos.Session]{}, ErrForbidden
+					return dtos.SessionListResponse{}, ErrForbidden
 				}
 				playerID = in.Viewer.UserID
 				targetIsViewer = true
 			}
 		default:
-			return dtos.Page[dtos.Session]{}, fmt.Errorf("%w: unknown scope %q", ErrInvalidData, scope)
+			return dtos.SessionListResponse{}, fmt.Errorf("%w: unknown scope %q", ErrInvalidData, scope)
 	}
 
-	// resolve status filter (preset expansion + allowlist enforcement)
 	statuses := resolveStatusFilter(in.Status, scope, targetIsViewer)
 	if len(statuses) == 0 {
-		// every value was dropped → no rows can match
-		return dtos.Page[dtos.Session]{Items: []dtos.Session{}}, nil
+		return dtos.SessionListResponse{Items: []dtos.Session{}, Users: map[string]dtos.UserBrief{}}, nil
 	}
 
 	limit := in.Limit
@@ -197,12 +213,20 @@ func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput) (dtos.
 
 	items, nextCursor, err := uc.repo.List(ctx, params)
 	if err != nil {
-		return dtos.Page[dtos.Session]{}, mapRepoErr("list sessions", err)
+		return dtos.SessionListResponse{}, mapRepoErr("list sessions", err)
 	}
-	return dtos.Page[dtos.Session]{Items: items, NextCursor: nextCursor}, nil
+	fmt.Println("hi")
+
+	masterIDs := make([]string, 0, len(items))
+	for _, s := range items {
+		masterIDs = append(masterIDs, s.MasterID)
+	}
+	users := uc.enrich(ctx, masterIDs)
+
+	return dtos.SessionListResponse{Items: items, NextCursor: nextCursor, Users: users}, nil
 }
 
-func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.Session, error) {
+func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.SessionResponse, error) {
 	s, err := uc.repo.GetByID(ctx, id)
 	if err != nil {
 		return nil, mapRepoErr("get session by id", err)
@@ -218,7 +242,26 @@ func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Vi
 		}
 	}
 
-	return s, nil
+	// Drafts have no players in practice; skip the fetch.
+	var players []dtos.SessionPlayer
+	if s.Status != dtos.Draft {
+		players, err = uc.repo.ListPlayers(ctx, id)
+		if err != nil {
+			return nil, mapRepoErr("list players for get session by id", err)
+		}
+	}
+	if players == nil {
+		players = []dtos.SessionPlayer{}
+	}
+
+	ids := make([]string, 0, 1+len(players))
+	ids = append(ids, s.MasterID)
+	for _, p := range players {
+		ids = append(ids, p.PlayerID)
+	}
+	users := uc.enrich(ctx, ids)
+
+	return &dtos.SessionResponse{Session: *s, Players: players, Users: users}, nil
 }
 
 func (uc *sessionUsecase) Create(ctx context.Context, in CreateSessionInput) (*dtos.Session, error) {
@@ -402,34 +445,46 @@ func (uc *sessionUsecase) isParticipant(ctx context.Context, s *dtos.Session, v 
 	return true, nil
 }
 
-func (uc *sessionUsecase) ListPlayers(ctx context.Context, sessionID string, v *entities.Viewer) ([]dtos.SessionPlayer, error) {
+func (uc *sessionUsecase) ListPlayers(ctx context.Context, sessionID string, v *entities.Viewer) (*dtos.SessionPlayersResponse, error) {
 	session, err := uc.repo.GetByID(ctx, sessionID)
 	if err != nil {
-		return []dtos.SessionPlayer{}, mapRepoErr("get session for list players", err)
+		return nil, mapRepoErr("get session for list players", err)
 	}
 
 	players, err := uc.repo.ListPlayers(ctx, sessionID)
 	if err != nil {
-		return []dtos.SessionPlayer{}, mapRepoErr("list session players", err)
+		return nil, mapRepoErr("list session players", err)
 	}
 
 	if session.Status == dtos.Draft {
-		return []dtos.SessionPlayer{}, ErrInvalidData
+		return nil, ErrInvalidData
 	}
 
-	if  session.Availability == dtos.Private {
-		if v.CanActAs(session.MasterID) {
-			return players, nil
-		}
-		for _, p := range players {
-			if v.Is(p.PlayerID) {
-				return players, nil
+	if session.Availability == dtos.Private {
+		allowed := v.CanActAs(session.MasterID)
+		if !allowed {
+			for _, p := range players {
+				if v.Is(p.PlayerID) {
+					allowed = true
+					break
+				}
 			}
 		}
-		return []dtos.SessionPlayer{}, ErrForbidden
+		if !allowed {
+			return nil, ErrForbidden
+		}
 	}
 
-	return players, nil
+	if players == nil {
+		players = []dtos.SessionPlayer{}
+	}
+	ids := make([]string, 0, len(players))
+	for _, p := range players {
+		ids = append(ids, p.PlayerID)
+	}
+	users := uc.enrich(ctx, ids)
+
+	return &dtos.SessionPlayersResponse{Players: players, Users: users}, nil
 }
 
 func (uc *sessionUsecase) Join(ctx context.Context, sessionID string, v *entities.Viewer, characterID *string) error {
@@ -492,4 +547,53 @@ func (uc *sessionUsecase) EditComment(ctx context.Context, commentID string, v *
 
 func (uc *sessionUsecase) DeleteComment(ctx context.Context, commentID string, v *entities.Viewer) error {
 	return ErrNotFound
+}
+
+// --- card-data --------------------------------------------------------------
+
+const maxCardDataBatch = 50
+
+// GetCardData returns SessionCardData per requested master id. Every requested
+// id appears in the result (in the same order) — masters with no public
+// sessions get an entry with empty SystemStats and nil NextSession.
+func (uc *sessionUsecase) GetCardData(ctx context.Context, masterIDs []string) ([]dtos.SessionCardData, error) {
+	if len(masterIDs) == 0 {
+		return []dtos.SessionCardData{}, nil
+	}
+	if len(masterIDs) > maxCardDataBatch {
+		return nil, fmt.Errorf("%w: at most %d masterId values per request", ErrInvalidData, maxCardDataBatch)
+	}
+
+	// dedupe while preserving order
+	seen := make(map[string]struct{}, len(masterIDs))
+	deduped := make([]string, 0, len(masterIDs))
+	for _, id := range masterIDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		deduped = append(deduped, id)
+	}
+
+	stats, err := uc.repo.GetSystemStats(ctx, deduped)
+	if err != nil {
+		return nil, mapRepoErr("get system stats", err)
+	}
+	next, err := uc.repo.GetNextSessions(ctx, deduped)
+	if err != nil {
+		return nil, mapRepoErr("get next sessions", err)
+	}
+
+	out := make([]dtos.SessionCardData, 0, len(deduped))
+	for _, id := range deduped {
+		out = append(out, dtos.SessionCardData{
+			UserID:      id,
+			SystemStats: stats[id],
+			NextSession: next[id],
+		})
+	}
+	return out, nil
 }

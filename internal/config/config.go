@@ -6,15 +6,16 @@ import (
 )
 
 type Config struct {
-	ServerPort    string
-	DatabaseURL   string
-	MigrateURL    string
-	MinPoolSize   int64
-	MaxPoolSize   int64
-	JWTSecret     string
-	UploadDir     string
-	PublicBaseURL string
-	MaxUploadSize int64
+	ServerPort        string
+	DatabaseURL       string
+	MigrateURL        string
+	MinPoolSize       int64
+	MaxPoolSize       int64
+	JWTSecret         string
+	UploadDir         string
+	PublicBaseURL     string
+	MaxUploadSize     int64
+	ProfileServiceURL string
 }
 
 func Load() *Config {
@@ -30,9 +31,10 @@ func Load() *Config {
 		MinPoolSize:   getEnvInt64("MIN_POOL_SIZE", 5),
 		MaxPoolSize:   getEnvInt64("MAX_POOL_SIZE", 25),
 		JWTSecret:     JWTSecret,
-		UploadDir:     getEnv("UPLOAD_DIR", "./uploads"),
-		PublicBaseURL: getEnv("PUBLIC_BASE_URL", "http://localhost:3000"),
-		MaxUploadSize: getEnvInt64("MAX_UPLOAD_SIZE", 5*1024*1024),
+		UploadDir:         getEnv("UPLOAD_DIR", "./uploads"),
+		PublicBaseURL:     getEnv("PUBLIC_BASE_URL", "http://localhost:3000"),
+		MaxUploadSize:     getEnvInt64("MAX_UPLOAD_SIZE", 5*1024*1024),
+		ProfileServiceURL: getEnv("PROFILE_SERVICE_URL", "http://localhost:3000"),
 	}
 }
 

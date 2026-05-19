@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -57,6 +58,7 @@ func (h *sessionHandler) RegisterRoutes(app *fiber.App) {
 	s := app.Group("/sessions")
 	
     s.Get("/",       h.rbac.Optional(), h.list)
+    s.Get("/cards",  h.rbac.Optional(), h.getCardData)
     s.Get("/:id",    h.rbac.Optional(), h.getByID)
     s.Post("/",      h.rbac.Protected(), h.create)
     s.Patch("/:id",  h.rbac.Protected(), h.edit)
@@ -93,7 +95,7 @@ func (h *sessionHandler) list(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	page, err := h.uc.List(c.Context(), usecase.ListSessionsInput{
+	resp, err := h.uc.List(c.Context(), usecase.ListSessionsInput{
 		Viewer:       entities.BuildViewerFromCtx(c),
 		Scope:        f.Scope,
 		MasterID:     f.MasterID,
@@ -118,13 +120,35 @@ func (h *sessionHandler) list(c fiber.Ctx) error {
 		h.log.Error().Err(err).Msg("list sessions failed")
 		return c.SendStatus(statusFor(err))
 	}
-	if page.Items == nil {
-		page.Items = []dtos.Session{}
+	if resp.Items == nil {
+		resp.Items = []dtos.Session{}
 	}
-	return c.Status(fiber.StatusOK).JSON(page)
+	if resp.Users == nil {
+		resp.Users = map[string]dtos.UserBrief{}
+	}
+	fmt.Println(len(resp.Items))
+	return c.Status(fiber.StatusOK).JSON(resp)
 }
 
-func (h *sessionHandler) getByID(c fiber.Ctx) error { 
+func (h *sessionHandler) getCardData(c fiber.Ctx) error {
+	type cardDataQuery struct {
+		MasterIDs []string `query:"masterId"`
+	}
+	var q cardDataQuery
+	if err := c.Bind().Query(&q); err != nil {
+		h.log.Warn().Err(err).Msg("invalid card data query")
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	cards, err := h.uc.GetCardData(c.Context(), q.MasterIDs)
+	if err != nil {
+		h.log.Error().Err(err).Msg("get session card data failed")
+		return c.SendStatus(statusFor(err))
+	}
+	return c.Status(fiber.StatusOK).JSON(cards)
+}
+
+func (h *sessionHandler) getByID(c fiber.Ctx) error {
 	id := c.Params("id")
 	session, err := h.uc.GetByID(c.Context(), id, entities.BuildViewerFromCtx(c))
 	if err != nil {
@@ -272,15 +296,18 @@ func (h *sessionHandler) changeStatus(c fiber.Ctx) error {
 
 func (h *sessionHandler) listPlayers(c fiber.Ctx) error {
 	id := c.Params("id")
-	players, err := h.uc.ListPlayers(c.Context(), id, entities.BuildViewerFromCtx(c))
+	resp, err := h.uc.ListPlayers(c.Context(), id, entities.BuildViewerFromCtx(c))
 	if err != nil {
 		h.log.Error().Err(err).Str("sessionId", id).Msg("list session players failed")
 		return c.SendStatus(statusFor(err))
 	}
-	if players == nil {
-		players = []dtos.SessionPlayer{}
+	if resp.Players == nil {
+		resp.Players = []dtos.SessionPlayer{}
 	}
-	return c.Status(fiber.StatusOK).JSON(players)
+	if resp.Users == nil {
+		resp.Users = map[string]dtos.UserBrief{}
+	}
+	return c.Status(fiber.StatusOK).JSON(resp)
 }
 func (h *sessionHandler) join(c fiber.Ctx) error           { return c.SendStatus(fiber.StatusNotImplemented) }
 func (h *sessionHandler) leave(c fiber.Ctx) error          { return c.SendStatus(fiber.StatusNotImplemented) }

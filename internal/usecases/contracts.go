@@ -7,6 +7,10 @@ import (
 	"github.com/itzLilix/questboard-shared/dtos"
 )
 
+type ProfileClient interface {
+	GetBriefs(ctx context.Context, ids []string) (map[string]dtos.UserBrief, error)
+}
+
 type GameSystemsRepository interface {
 	GetCurated(ctx context.Context) ([]dtos.GameSystem, error)
 	Search(ctx context.Context, q string) ([]dtos.GameSystem, error)
@@ -48,6 +52,10 @@ type SessionRepository interface {
 	GetComment(ctx context.Context, commentID string) (*dtos.SessionCommentary, error)
 	UpdateComment(ctx context.Context, commentID, text string) (*dtos.SessionCommentary, error)
 	DeleteComment(ctx context.Context, commentID string) error
+
+	// card-data aggregates for GM catalog display
+	GetSystemStats(ctx context.Context, masterIDs []string) (map[string][]dtos.SystemStat, error)
+	GetNextSessions(ctx context.Context, masterIDs []string) (map[string]*dtos.NextSession, error)
 }
 
 type CampaignRepository interface {

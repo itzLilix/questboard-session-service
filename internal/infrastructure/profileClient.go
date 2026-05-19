@@ -1,0 +1,92 @@
+package infrastructure
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/itzLilix/questboard-shared/dtos"
+)
+
+const (
+	profileBatchCap     = 100
+	profileHTTPTimeout  = 3 * time.Second
+)
+
+type HTTPProfileClient struct {
+	baseURL string
+	client  *http.Client
+}
+
+func NewHTTPProfileClient(baseURL string) *HTTPProfileClient {
+	return &HTTPProfileClient{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		client:  &http.Client{Timeout: profileHTTPTimeout},
+	}
+}
+
+// GetBriefs fetches minimal user info for the given ids. Missing ids are simply
+// absent from the returned map — callers should treat absence as "unknown user".
+// Order of ids does not matter; duplicates are deduped.
+func (c *HTTPProfileClient) GetBriefs(ctx context.Context, ids []string) (map[string]dtos.UserBrief, error) {
+	if len(ids) == 0 {
+		return map[string]dtos.UserBrief{}, nil
+	}
+
+	seen := make(map[string]struct{}, len(ids))
+	deduped := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		deduped = append(deduped, id)
+	}
+	if len(deduped) == 0 {
+		return map[string]dtos.UserBrief{}, nil
+	}
+	if len(deduped) > profileBatchCap {
+		return nil, fmt.Errorf("profile batch too large: %d (max %d)", len(deduped), profileBatchCap)
+	}
+
+	q := url.Values{}
+	q.Set("ids", strings.Join(deduped, ","))
+	endpoint := c.baseURL + "/users?" + q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build profile request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call profile service: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("profile service returned %d", resp.StatusCode)
+	}
+
+	var briefs []dtos.UserBrief
+	if err := json.NewDecoder(resp.Body).Decode(&briefs); err != nil {
+		return nil, fmt.Errorf("decode profile response: %w", err)
+	}
+
+	out := make(map[string]dtos.UserBrief, len(briefs))
+	for _, b := range briefs {
+		if b.ID == "" {
+			continue
+		}
+		out[b.ID] = b
+	}
+	return out, nil
+}

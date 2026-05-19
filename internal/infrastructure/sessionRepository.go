@@ -115,6 +115,7 @@ var sortColumns = map[string]string{
 }
 
 func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]dtos.Session, string, error) {
+	fmt.Println(p)
 	q := r.psql.
 		Select(sessionColumns...).
 		From("sessions s").
@@ -261,7 +262,7 @@ func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]d
 		}
 		nextCursor = nc
 	}
-
+	fmt.Println(query)
 	return items, nextCursor, nil
 }
 
@@ -314,6 +315,7 @@ func (r *sessionRepository) Create(ctx context.Context, p *CreateSessionParams) 
 	if err := r.db.QueryRow(ctx, insert, args...).Scan(&newID); err != nil {
 		return nil, fmt.Errorf("insert session: %w", err)
 	}
+	fmt.Println(newID)
 
 	return r.GetByID(ctx, newID)
 }
@@ -552,4 +554,112 @@ func (r *sessionRepository) UpdateComment(ctx context.Context, commentID, text s
 
 func (r *sessionRepository) DeleteComment(ctx context.Context, commentID string) error {
 	return nil
+}
+
+// --- card-data aggregates ---------------------------------------------------
+
+// GetSystemStats returns, per master, the list of game systems they've run
+// (status published/ongoing/completed, non-private), with a count per system,
+// ordered by count desc. Output map is keyed by master_id.
+func (r *sessionRepository) GetSystemStats(ctx context.Context, masterIDs []string) (map[string][]dtos.SystemStat, error) {
+	out := make(map[string][]dtos.SystemStat, len(masterIDs))
+	if len(masterIDs) == 0 {
+		return out, nil
+	}
+
+	query, args, err := r.psql.
+		Select(
+			"s.master_id",
+			"gs.id", "gs.slug", "gs.canonical_name", "COALESCE(gs.badge_color, '')", "gs.is_curated",
+			"COUNT(*)",
+		).
+		From("sessions s").
+		Join("game_systems gs ON gs.id = s.system_id").
+		Where(sq.Eq{"s.master_id": masterIDs}).
+		Where(sq.Eq{"s.status": []dtos.SessionStatus{dtos.Published, dtos.Ongoing, dtos.Completed}}).
+		Where(sq.NotEq{"s.availability": dtos.Private}).
+		GroupBy("s.master_id", "gs.id", "gs.slug", "gs.canonical_name", "gs.badge_color", "gs.is_curated").
+		OrderBy("s.master_id", "COUNT(*) DESC").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build get system stats: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query system stats: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			masterID string
+			stat     dtos.SystemStat
+		)
+		if err := rows.Scan(
+			&masterID,
+			&stat.Id, &stat.Slug, &stat.Name, &stat.BadgeColor, &stat.IsCurated,
+			&stat.SessionsCount,
+		); err != nil {
+			return nil, fmt.Errorf("scan system stats: %w", err)
+		}
+		out[masterID] = append(out[masterID], stat)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate system stats: %w", err)
+	}
+	return out, nil
+}
+
+// GetNextSessions returns, per master, their next upcoming session
+// (published/ongoing, non-private, scheduled_at >= NOW()). Uses DISTINCT ON
+// to pick the earliest scheduled session per master in a single query.
+func (r *sessionRepository) GetNextSessions(ctx context.Context, masterIDs []string) (map[string]*dtos.NextSession, error) {
+	out := make(map[string]*dtos.NextSession, len(masterIDs))
+	if len(masterIDs) == 0 {
+		return out, nil
+	}
+
+	query, args, err := r.psql.
+		Select(
+			"DISTINCT ON (s.master_id) s.master_id",
+			"s.scheduled_at", "s.format", "s.type",
+			"gs.id", "gs.slug", "gs.canonical_name", "COALESCE(gs.badge_color, '')", "gs.is_curated",
+		).
+		From("sessions s").
+		Join("game_systems gs ON gs.id = s.system_id").
+		Where(sq.Eq{"s.master_id": masterIDs}).
+		Where(sq.Eq{"s.status": []dtos.SessionStatus{dtos.Published, dtos.Ongoing}}).
+		Where(sq.NotEq{"s.availability": dtos.Private}).
+		Where("s.scheduled_at IS NOT NULL AND s.scheduled_at >= NOW()").
+		OrderBy("s.master_id", "s.scheduled_at ASC").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build get next sessions: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query next sessions: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			masterID string
+			next     dtos.NextSession
+		)
+		if err := rows.Scan(
+			&masterID,
+			&next.ScheduledAt, &next.Format, &next.Type,
+			&next.System.Id, &next.System.Slug, &next.System.Name, &next.System.BadgeColor, &next.System.IsCurated,
+		); err != nil {
+			return nil, fmt.Errorf("scan next session: %w", err)
+		}
+		out[masterID] = &next
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate next sessions: %w", err)
+	}
+	return out, nil
 }
