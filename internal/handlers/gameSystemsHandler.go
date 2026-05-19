@@ -31,7 +31,7 @@ func (h *gameSystemsHandler) RegisterRoutes(app *fiber.App) {
 }
 
 func (h *gameSystemsHandler) getCurated(c fiber.Ctx) error {
-	systems, err := h.uc.GetCurated()
+	systems, err := h.uc.GetCurated(c.Context())
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to get curated systems")
 		return c.SendStatus(fiber.StatusInternalServerError)
@@ -46,7 +46,7 @@ func (h *gameSystemsHandler) search(c fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "query parameter is required"})
 	}
 
-	systems, err := h.uc.Search(q)
+	systems, err := h.uc.Search(c.Context(), q)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to search systems")
 		return c.SendStatus(fiber.StatusInternalServerError)
@@ -65,7 +65,7 @@ func (h *gameSystemsHandler) addUserSystem(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
     }
 
-	added, err := h.uc.AddUserSystem(&usecase.CreateGameSystemInput{
+	added, err := h.uc.AddUserSystem(c.Context(), &usecase.CreateGameSystemInput{
 		Name: system.Name,
 	})
 	if err != nil {

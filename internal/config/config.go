@@ -9,6 +9,8 @@ type Config struct {
 	ServerPort    string
 	DatabaseURL   string
 	MigrateURL    string
+	MinPoolSize   int64
+	MaxPoolSize   int64
 	JWTSecret     string
 	UploadDir     string
 	PublicBaseURL string
@@ -25,6 +27,8 @@ func Load() *Config {
 		ServerPort:    getEnv("SERVER_PORT", "3001"),
 		DatabaseURL:   getEnv("POSTGRES_URL", ""),
 		MigrateURL:    getEnv("MIGRATE_URL", ""),
+		MinPoolSize:   getEnvInt64("MIN_POOL_SIZE", 5),
+		MaxPoolSize:   getEnvInt64("MAX_POOL_SIZE", 25),
 		JWTSecret:     JWTSecret,
 		UploadDir:     getEnv("UPLOAD_DIR", "./uploads"),
 		PublicBaseURL: getEnv("PUBLIC_BASE_URL", "http://localhost:3000"),

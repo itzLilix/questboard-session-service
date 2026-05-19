@@ -41,7 +41,7 @@ func main() {
 
 	app.Get("/uploads/*", static.New(cfg.UploadDir))
 
-	conn, err := infrastructure.Connect(cfg.DatabaseURL)
+	conn, err := infrastructure.Connect(cfg.DatabaseURL, int32(cfg.MinPoolSize), int32(cfg.MaxPoolSize))
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to database")
 	}

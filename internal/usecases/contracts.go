@@ -8,9 +8,9 @@ import (
 )
 
 type GameSystemsRepository interface {
-	GetCurated() ([]dtos.GameSystem, error)
-	Search(q string) ([]dtos.GameSystem, error)
-	AddGameSystem(params *infrastructure.CreateGameSystemParams) (*dtos.GameSystem, error)
+	GetCurated(ctx context.Context) ([]dtos.GameSystem, error)
+	Search(ctx context.Context, q string) ([]dtos.GameSystem, error)
+	AddGameSystem(ctx context.Context, params *infrastructure.CreateGameSystemParams) (*dtos.GameSystem, error)
 }
 
 type SessionRepository interface {
@@ -28,6 +28,7 @@ type SessionRepository interface {
 	Leave(ctx context.Context, sessionID, playerID string) error
 	Kick(ctx context.Context, sessionID, playerID string) error
 	SetCharacter(ctx context.Context, sessionID, playerID string, characterID *string) error
+	IsPlayer(ctx context.Context, sessionID, userID string) (bool, error)
 
 	// applications
 	CreateApplication(ctx context.Context, p *infrastructure.CreateApplicationParams) (*dtos.SessionApplication, error)

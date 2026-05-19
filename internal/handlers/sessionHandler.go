@@ -4,8 +4,10 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/itzLilix/questboard-session-service/internal/entities"
 	"github.com/itzLilix/questboard-session-service/internal/middleware"
 	usecase "github.com/itzLilix/questboard-session-service/internal/usecases"
+	"github.com/itzLilix/questboard-shared/dtos"
 	"github.com/rs/zerolog"
 )
 
@@ -28,22 +30,27 @@ func NewSessionHandler(uc usecase.SessionUsecase, rbac middleware.RBACMiddleware
 }
 
 type SessionFilter struct {
-    Search       string     `query:"search"`
-    Format       string     `query:"format"`
-    Type         string     `query:"type"`
-    City         string     `query:"city"`
-    SystemID     string     `query:"systemId"`
-    HasFreeSeats bool       `query:"hasFreeSeats"`
+	Scope    dtos.SessionScope `query:"scope"`
+	MasterID string            `query:"masterId"`
+	PlayerID string            `query:"playerId"`
+	Status   []string          `query:"status"` // repeated; accepts real statuses + "public" preset
 
-    PriceMin     *float64   `query:"priceMin"`
-    PriceMax     *float64   `query:"priceMax"`
-    DateFrom     *time.Time `query:"dateFrom"`
-    DateTo       *time.Time `query:"dateTo"`
+	Search       string `query:"search"`
+	Format       string `query:"format"`
+	Type         string `query:"type"`
+	City         string `query:"city"`
+	SystemID     string `query:"systemId"`
+	HasFreeSeats bool   `query:"hasFreeSeats"`
 
-    Sort         string     `query:"sort"`
-    SortOrder    string     `query:"order"`
-    Cursor       string     `query:"cursor"`
-    Limit        int        `query:"limit"`
+	PriceMin *float64   `query:"priceMin"`
+	PriceMax *float64   `query:"priceMax"`
+	DateFrom *time.Time `query:"dateFrom"`
+	DateTo   *time.Time `query:"dateTo"`
+
+	Sort      string `query:"sort"`
+	SortOrder string `query:"order"`
+	Cursor    string `query:"cursor"`
+	Limit     int    `query:"limit"`
 }
 
 func (h *sessionHandler) RegisterRoutes(app *fiber.App) {
@@ -79,16 +86,202 @@ func (h *sessionHandler) RegisterRoutes(app *fiber.App) {
 
 // --- sessions ---------------------------------------------------------------
 
-func (h *sessionHandler) list(c fiber.Ctx) error         { return c.SendStatus(fiber.StatusNotImplemented) }
-func (h *sessionHandler) getByID(c fiber.Ctx) error      { return c.SendStatus(fiber.StatusNotImplemented) }
-func (h *sessionHandler) create(c fiber.Ctx) error       { return c.SendStatus(fiber.StatusNotImplemented) }
-func (h *sessionHandler) edit(c fiber.Ctx) error         { return c.SendStatus(fiber.StatusNotImplemented) }
-func (h *sessionHandler) delete(c fiber.Ctx) error       { return c.SendStatus(fiber.StatusNotImplemented) }
-func (h *sessionHandler) changeStatus(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
+func (h *sessionHandler) list(c fiber.Ctx) error {
+	var f SessionFilter
+	if err := c.Bind().Query(&f); err != nil {
+		h.log.Warn().Err(err).Msg("invalid list session query")
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	page, err := h.uc.List(c.Context(), usecase.ListSessionsInput{
+		Viewer:       entities.BuildViewerFromCtx(c),
+		Scope:        f.Scope,
+		MasterID:     f.MasterID,
+		PlayerID:     f.PlayerID,
+		Status:       f.Status,
+		Search:       f.Search,
+		Format:       f.Format,
+		Type:         f.Type,
+		City:         f.City,
+		SystemID:     f.SystemID,
+		HasFreeSeats: f.HasFreeSeats,
+		PriceMin:     f.PriceMin,
+		PriceMax:     f.PriceMax,
+		DateFrom:     f.DateFrom,
+		DateTo:       f.DateTo,
+		Sort:         f.Sort,
+		SortOrder:    f.SortOrder,
+		Cursor:       f.Cursor,
+		Limit:        f.Limit,
+	})
+	if err != nil {
+		h.log.Error().Err(err).Msg("list sessions failed")
+		return c.SendStatus(statusFor(err))
+	}
+	if page.Items == nil {
+		page.Items = []dtos.Session{}
+	}
+	return c.Status(fiber.StatusOK).JSON(page)
+}
+
+func (h *sessionHandler) getByID(c fiber.Ctx) error { 
+	id := c.Params("id")
+	session, err := h.uc.GetByID(c.Context(), id, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		h.log.Error().Err(err).Str("sessionId", id).Msg("get session by id failed")
+		return c.SendStatus(statusFor(err))
+	}
+	return c.Status(fiber.StatusOK).JSON(session)
+}
+
+func (h *sessionHandler) create(c fiber.Ctx) error {
+	type CreateSessionRequest struct {
+		// required
+		Title    string             `json:"title"`
+		Format   dtos.SessionFormat `json:"format"`
+		SystemID string             `json:"systemId"`
+		MaxSeats uint8              `json:"maxSeats"`
+
+		// optional
+		ScheduledAt   *time.Time                `json:"scheduledAt,omitempty"`
+		Description   *string                   `json:"description,omitempty"`
+		Location      *dtos.Location            `json:"location,omitempty"`
+		DurationHours *float64                  `json:"durationHours,omitempty"`
+		Price         *float64                  `json:"price,omitempty"`
+		Availability  *dtos.SessionAvailability `json:"availability,omitempty"`
+		PreviewURL    *string                   `json:"previewUrl,omitempty"`
+		MasterNotes   *string                   `json:"masterNotes,omitempty"`
+	}
+
+	var req CreateSessionRequest
+	if err := c.Bind().Body(&req); err != nil {
+		h.log.Warn().Err(err).Msg("invalid create session body")
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	in := usecase.CreateSessionInput{
+		Viewer:        entities.BuildViewerFromCtx(c),
+		Title:         req.Title,
+		Format:        req.Format,
+		SystemID:      req.SystemID,
+		ScheduledAt:   req.ScheduledAt,
+		MaxSeats:      int16(req.MaxSeats),
+		Description:   derefOr(req.Description, ""),
+		MasterNotes:   derefOr(req.MasterNotes, ""),
+		PreviewURL:    derefOr(req.PreviewURL, ""),
+		Price:         derefOr(req.Price, 0),
+		Availability:  derefOr(req.Availability, dtos.Open),
+		DurationHours: req.DurationHours,
+	}
+	if req.Location != nil {
+		in.Address = req.Location.Address
+		in.Lat = &req.Location.Lat
+		in.Lng = &req.Location.Lng
+	}
+
+	session, err := h.uc.Create(c.Context(), in)
+	if err != nil {
+		h.log.Error().Err(err).Msg("create session failed")
+		return c.SendStatus(statusFor(err))
+	}
+	return c.Status(fiber.StatusCreated).JSON(session)
+}
+
+func (h *sessionHandler) edit(c fiber.Ctx) error {
+	type EditSessionRequest struct {
+		Title         *string                   `json:"title,omitempty"`
+		Description   *string                   `json:"description,omitempty"`
+		Location      *dtos.Location            `json:"location,omitempty"`
+		MasterNotes   *string                   `json:"masterNotes,omitempty"`
+		PreviewURL    *string                   `json:"previewUrl,omitempty"`
+		Format        *dtos.SessionFormat       `json:"format,omitempty"`
+		Availability  *dtos.SessionAvailability `json:"availability,omitempty"`
+		SystemID      *string                   `json:"systemId,omitempty"`
+		ScheduledAt   *time.Time                `json:"scheduledAt,omitempty"`
+		DurationHours *float64                  `json:"durationHours,omitempty"`
+		MaxSeats      *int16                    `json:"maxSeats,omitempty"`
+		Price         *float64                  `json:"price,omitempty"`
+	}
+
+	var req EditSessionRequest
+	if err := c.Bind().Body(&req); err != nil {
+		h.log.Warn().Err(err).Msg("invalid edit session body")
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	in := usecase.EditSessionInput{
+		Title:         req.Title,
+		Description:   req.Description,
+		MasterNotes:   req.MasterNotes,
+		PreviewURL:    req.PreviewURL,
+		Format:        req.Format,
+		Availability:  req.Availability,
+		SystemID:      req.SystemID,
+		ScheduledAt:   req.ScheduledAt,
+		DurationHours: req.DurationHours,
+		MaxSeats:      req.MaxSeats,
+		Price:         req.Price,
+	}
+	if req.Location != nil {
+		addr := req.Location.Address
+		lat := req.Location.Lat
+		lng := req.Location.Lng
+		in.Address = &addr
+		in.Lat = &lat
+		in.Lng = &lng
+	}
+
+	id := c.Params("id")
+	session, err := h.uc.Edit(c.Context(), id, entities.BuildViewerFromCtx(c), in)
+	if err != nil {
+		h.log.Error().Err(err).Str("sessionId", id).Msg("edit session failed")
+		return c.SendStatus(statusFor(err))
+	}
+	return c.Status(fiber.StatusOK).JSON(session)
+}
+
+func (h *sessionHandler) delete(c fiber.Ctx) error {
+	id := c.Params("id")
+	if err := h.uc.Delete(c.Context(), id, entities.BuildViewerFromCtx(c)); err != nil {
+		h.log.Error().Err(err).Str("sessionId", id).Msg("delete session failed")
+		return c.SendStatus(statusFor(err))
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *sessionHandler) changeStatus(c fiber.Ctx) error {
+	type ChangeStatusRequest struct {
+		Status dtos.SessionStatus `json:"status"`
+	}
+
+	var req ChangeStatusRequest
+	if err := c.Bind().Body(&req); err != nil || req.Status == "" {
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	id := c.Params("id")
+	session, err := h.uc.ChangeStatus(c.Context(), id, entities.BuildViewerFromCtx(c), req.Status)
+	if err != nil {
+		h.log.Error().Err(err).Str("sessionId", id).Str("status", string(req.Status)).Msg("change session status failed")
+		return c.SendStatus(statusFor(err))
+	}
+	return c.Status(fiber.StatusOK).JSON(session)
+}
 
 // --- players ----------------------------------------------------------------
 
-func (h *sessionHandler) listPlayers(c fiber.Ctx) error    { return c.SendStatus(fiber.StatusNotImplemented) }
+func (h *sessionHandler) listPlayers(c fiber.Ctx) error {
+	id := c.Params("id")
+	players, err := h.uc.ListPlayers(c.Context(), id, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		h.log.Error().Err(err).Str("sessionId", id).Msg("list session players failed")
+		return c.SendStatus(statusFor(err))
+	}
+	if players == nil {
+		players = []dtos.SessionPlayer{}
+	}
+	return c.Status(fiber.StatusOK).JSON(players)
+}
 func (h *sessionHandler) join(c fiber.Ctx) error           { return c.SendStatus(fiber.StatusNotImplemented) }
 func (h *sessionHandler) leave(c fiber.Ctx) error          { return c.SendStatus(fiber.StatusNotImplemented) }
 func (h *sessionHandler) kickPlayer(c fiber.Ctx) error     { return c.SendStatus(fiber.StatusNotImplemented) }

@@ -2,11 +2,16 @@ package infrastructure
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/itzLilix/questboard-session-service/internal/entities"
+	"github.com/itzLilix/questboard-shared/cursor"
 	"github.com/itzLilix/questboard-shared/dtos"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -16,22 +21,28 @@ type sessionRepository struct {
 }
 
 type ListSessionsParams struct {
-	Viewer        *entities.Viewer
-	Search        string
-	Format        string
-	Type          string
-	City          string
-	SystemID      string
-	HasFreeSeats  bool
-	PriceMin      *float64
-	PriceMax      *float64
-	DateFrom      *time.Time
-	DateTo        *time.Time
-	Sort          string
-	SortOrder     string
-	Cursor        string
-	Limit         int
-	IncludeDrafts bool
+	Viewer *entities.Viewer
+
+	Scope          dtos.SessionScope
+	MasterID       string
+	PlayerID       string
+	Status         []dtos.SessionStatus
+	TargetIsViewer bool
+
+	Search       string
+	Format       string
+	Type         string
+	City         string
+	SystemID     string
+	HasFreeSeats bool
+	PriceMin     *float64
+	PriceMax     *float64
+	DateFrom     *time.Time
+	DateTo       *time.Time
+	Sort         string
+	SortOrder    string
+	Cursor       string
+	Limit        int
 }
 
 type CreateSessionParams struct {
@@ -44,7 +55,7 @@ type CreateSessionParams struct {
 	Availability  dtos.SessionAvailability
 	SystemID      string
 	MasterID      string
-	ScheduledAt   time.Time
+	ScheduledAt   *time.Time
 	DurationHours *float64
 	Lat           *float64
 	Lng           *float64
@@ -96,34 +107,377 @@ func NewSessionRepository(db *pgxpool.Pool, psql sq.StatementBuilderType) *sessi
 
 // --- sessions ---------------------------------------------------------------
 
+var sortColumns = map[string]string{
+	"scheduled_at": "s.scheduled_at",
+	"created_at":   "s.created_at",
+	"price":        "s.price",
+	"title":        "s.title",
+}
+
 func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]dtos.Session, string, error) {
-	return nil, "", nil
+	q := r.psql.
+		Select(sessionColumns...).
+		From("sessions s").
+		Join("game_systems gs ON gs.id = s.system_id")
+
+	// --- scope-specific WHERE ---
+	switch p.Scope {
+		case dtos.ScopeCatalog:
+			q = q.Where(sq.NotEq{"s.availability": dtos.Private}).
+				Where("(s.scheduled_at IS NULL OR s.scheduled_at >= NOW())")
+		case dtos.ScopeMastering:
+			q = q.Where(sq.Eq{"s.master_id": p.MasterID})
+		case dtos.ScopePlaying:
+			q = q.Where(sq.Expr(
+				"EXISTS (SELECT 1 FROM session_players sp WHERE sp.session_id = s.id AND sp.player_id = ? AND sp.status = ?)",
+				p.PlayerID, dtos.PlayerActive,
+			))
+		default:
+			return nil, "", fmt.Errorf("unknown scope %q", p.Scope)
+	}
+
+	// --- visibility predicate (skipped when target == viewer or in catalog) ---
+	if !p.TargetIsViewer && p.Scope != dtos.ScopeCatalog {
+		visibility := sq.Or{
+			sq.And{
+				sq.Expr("s.status NOT IN (?, ?)", dtos.Draft, dtos.Cancelled),
+				sq.NotEq{"s.availability": dtos.Private},
+			},
+		}
+		if p.Viewer.IsAuthenticated() {
+			visibility = append(visibility, sq.Eq{"s.master_id": p.Viewer.UserID})
+			visibility = append(visibility, sq.Expr(
+				"EXISTS (SELECT 1 FROM session_players sp WHERE sp.session_id = s.id AND sp.player_id = ? AND sp.status = ?)",
+				p.Viewer.UserID, dtos.PlayerActive,
+			))
+		}
+		q = q.Where(visibility)
+	}
+
+	// --- universal filters ---
+	q = q.Where(sq.Eq{"s.status": p.Status})
+	if p.Search != "" {
+		q = q.Where("s.title ILIKE ?", "%"+p.Search+"%")
+	}
+	if p.Format != "" {
+		q = q.Where(sq.Eq{"s.format": p.Format})
+	}
+	if p.Type != "" {
+		q = q.Where(sq.Eq{"s.type": p.Type})
+	}
+	if p.City != "" {
+		q = q.Where("s.address ILIKE ?", "%"+p.City+"%")
+	}
+	if p.SystemID != "" {
+		q = q.Where(sq.Eq{"s.system_id": p.SystemID})
+	}
+	if p.HasFreeSeats {
+		q = q.Where(sq.Gt{"s.free_seats": 0})
+	}
+	if p.PriceMin != nil {
+		q = q.Where(sq.GtOrEq{"s.price": *p.PriceMin})
+	}
+	if p.PriceMax != nil {
+		q = q.Where(sq.LtOrEq{"s.price": *p.PriceMax})
+	}
+	if p.DateFrom != nil {
+		q = q.Where(sq.GtOrEq{"s.scheduled_at": *p.DateFrom})
+	}
+	if p.DateTo != nil {
+		q = q.Where(sq.Lt{"s.scheduled_at": *p.DateTo})
+	}
+
+	// --- sort resolution ---
+	sortKey := p.Sort
+	if _, ok := sortColumns[sortKey]; !ok {
+		// scope-specific defaults
+		if p.Scope == dtos.ScopeCatalog {
+			sortKey = "scheduled_at"
+		} else {
+			sortKey = "created_at"
+		}
+	}
+	sortCol := sortColumns[sortKey]
+
+	asc := p.Scope == dtos.ScopeCatalog // catalog default ASC, others DESC
+	if p.SortOrder != "" {
+		asc = strings.EqualFold(p.SortOrder, "asc")
+	}
+
+	// --- cursor (keyset) ---
+	cursor, err := cursor.DecodeCursor[sessionCursor](p.Cursor)
+	if err != nil {
+		return nil, "", err
+	}
+	q, err = applyCursor(q, cursor, sortKey, asc)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// --- ORDER BY + tiebreaker ---
+	dir := "ASC"
+	nulls := "NULLS LAST"
+	if !asc {
+		dir = "DESC"
+		nulls = "NULLS FIRST"
+	}
+	q = q.OrderBy(
+		fmt.Sprintf("%s %s %s", sortCol, dir, nulls),
+		fmt.Sprintf("s.id %s", dir),
+	)
+
+	q = q.Limit(uint64(p.Limit + 1))
+
+	query, args, err := q.ToSql()
+	if err != nil {
+		return nil, "", fmt.Errorf("build list sessions query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, "", fmt.Errorf("query list sessions: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]dtos.Session, 0, p.Limit)
+	for rows.Next() {
+		var s dtos.Session
+		if err := scanSession(rows, &s); err != nil {
+			return nil, "", fmt.Errorf("scan list session row: %w", err)
+		}
+		items = append(items, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", fmt.Errorf("iterate list sessions: %w", err)
+	}
+
+	// --- pagination ---
+	var nextCursor string
+	if len(items) > p.Limit {
+		items = items[:p.Limit] // drop the sentinel +1 row
+		nc, err := buildNextCursor(items[p.Limit-1], sortKey, asc)
+		if err != nil {
+			return nil, "", fmt.Errorf("encode next cursor: %w", err)
+		}
+		nextCursor = nc
+	}
+
+	return items, nextCursor, nil
 }
 
 func (r *sessionRepository) GetByID(ctx context.Context, id string) (*dtos.Session, error) {
-	return nil, ErrNotFound
+	query, args, err := r.psql.
+		Select(sessionColumns...).
+		From("sessions s").
+		Join("game_systems gs ON gs.id = s.system_id").
+		Where(sq.Eq{"s.id": id}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build get session query: %w", err)
+	}
+
+	row := r.db.QueryRow(ctx, query, args...)
+	s := &dtos.Session{}
+	if err := scanSession(row, s); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("scan session: %w", err)
+	}
+	return s, nil
 }
 
 func (r *sessionRepository) Create(ctx context.Context, p *CreateSessionParams) (*dtos.Session, error) {
-	return nil, nil
+	insert, args, err := r.psql.
+		Insert("sessions").
+		Columns(
+			"title", "format", "scheduled_at", "system_id", "max_seats", "master_id",
+			"price", "availability", "free_seats",
+			"address", "lat", "lng",
+			"description", "preview_url", "master_notes",
+			"duration_hours",
+		).
+		Values(
+			p.Title, p.Format, p.ScheduledAt, p.SystemID, p.MaxSeats, p.MasterID,
+			p.Price, p.Availability, p.MaxSeats,
+			nullString(p.Address), p.Lat, p.Lng,
+			nullString(p.Description), nullString(p.PreviewURL), nullString(p.MasterNotes),
+			p.DurationHours,
+		).
+		Suffix("RETURNING id").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build insert session: %w", err)
+	}
+
+	var newID string
+	if err := r.db.QueryRow(ctx, insert, args...).Scan(&newID); err != nil {
+		return nil, fmt.Errorf("insert session: %w", err)
+	}
+
+	return r.GetByID(ctx, newID)
 }
 
 func (r *sessionRepository) Update(ctx context.Context, id string, p *UpdateSessionParams) (*dtos.Session, error) {
-	return nil, nil
+	upd := r.psql.Update("sessions").Where(sq.Eq{"id": id})
+
+	if p.Title != nil {
+		upd = upd.Set("title", *p.Title)
+	}
+	if p.Description != nil {
+		upd = upd.Set("description", nullString(*p.Description))
+	}
+	if p.Address != nil {
+		upd = upd.Set("address", nullString(*p.Address))
+	}
+	if p.MasterNotes != nil {
+		upd = upd.Set("master_notes", nullString(*p.MasterNotes))
+	}
+	if p.PreviewURL != nil {
+		upd = upd.Set("preview_url", nullString(*p.PreviewURL))
+	}
+	if p.Format != nil {
+		upd = upd.Set("format", *p.Format)
+		// transitioning to online: location is no longer meaningful — clear it
+		// in the same UPDATE so the DB never carries phantom address data for
+		// online sessions (would otherwise leak into city filters and admin views).
+		if *p.Format == dtos.Online {
+			upd = upd.Set("address", nil).Set("lat", nil).Set("lng", nil)
+		}
+	}
+	if p.Availability != nil {
+		upd = upd.Set("availability", *p.Availability)
+	}
+	if p.SystemID != nil {
+		upd = upd.Set("system_id", *p.SystemID)
+	}
+	if p.ScheduledAt != nil {
+		upd = upd.Set("scheduled_at", *p.ScheduledAt)
+	}
+	if p.DurationHours != nil {
+		upd = upd.Set("duration_hours", *p.DurationHours)
+	}
+	if p.Lat != nil {
+		upd = upd.Set("lat", *p.Lat)
+	}
+	if p.Lng != nil {
+		upd = upd.Set("lng", *p.Lng)
+	}
+	if p.MaxSeats != nil {
+		upd = upd.Set("max_seats", *p.MaxSeats)
+		upd = upd.Set("free_seats", sq.Expr("? - (max_seats - free_seats)", *p.MaxSeats))
+	}
+	if p.Price != nil {
+		upd = upd.Set("price", *p.Price)
+	}
+	upd = upd.Set("updated_at", sq.Expr("NOW()"))
+
+	query, args, err := upd.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build update session: %w", err)
+	}
+
+	tag, err := r.db.Exec(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("exec update session: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotFound
+	}
+
+	return r.GetByID(ctx, id)
 }
 
 func (r *sessionRepository) Delete(ctx context.Context, id string) error {
+	delete, args, err := r.psql.
+		Delete("sessions").
+		Where(sq.Eq{"id": id}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build delete session: %w", err)
+	}
+
+	tag, err := r.db.Exec(ctx, delete, args...)
+	if err != nil {
+		return fmt.Errorf("exec delete session: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
 	return nil
 }
 
 func (r *sessionRepository) UpdateStatus(ctx context.Context, id string, status dtos.SessionStatus) error {
+	query, args, err := r.psql.
+		Update("sessions").
+		Set("status", status).
+		Set("updated_at", sq.Expr("NOW()")).
+		Where(sq.Eq{"id": id}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build update session status: %w", err)
+	}
+
+	tag, err := r.db.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("exec update session status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
 	return nil
 }
 
 // --- players ----------------------------------------------------------------
 
+func (r *sessionRepository) IsPlayer(ctx context.Context, sessionID, userID string) (bool, error) {
+	query, args, err := r.psql.
+		Select("sp.player_id").
+		From("session_players sp").
+		Join("sessions s ON s.id = sp.session_id").
+		Where(sq.Eq{"s.id": sessionID, "sp.player_id": userID}).
+		ToSql()
+	if err != nil {
+		return false, fmt.Errorf("build check participant query: %w", err)
+	}
+
+	var id string
+	if err := r.db.QueryRow(ctx, query, args...).Scan(&id); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("exec check participant query: %w", err)
+	}
+	return true, nil
+}
+
 func (r *sessionRepository) ListPlayers(ctx context.Context, sessionID string) ([]dtos.SessionPlayer, error) {
-	return nil, nil
+	query, args, err := r.psql.
+		Select(sessionPlayerColumns...).
+		From("session_players sp").
+		LeftJoin("characters ch ON ch.id = sp.character_id").
+		Where(sq.Eq{"sp.session_id": sessionID, "sp.status": dtos.PlayerActive}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build list players query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("exec list players query: %w", err)
+	}
+	defer rows.Close()
+
+	var players []dtos.SessionPlayer
+	for rows.Next() {
+		var p dtos.SessionPlayer
+		if err := scanSessionPlayer(rows, &p); err != nil {
+			return nil, fmt.Errorf("scan player row: %w", err)
+		}
+		players = append(players, p)
+	}
+
+	return players, nil
 }
 
 func (r *sessionRepository) Join(ctx context.Context, sessionID, playerID string, characterID *string) error {

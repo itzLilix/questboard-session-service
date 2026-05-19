@@ -27,7 +27,7 @@ func NewGameSystemsRepository(db *pgxpool.Pool, psql sq.StatementBuilderType) *g
 	return &gameSystemsRepository{db: db, psql: psql}
 }
 
-func (r *gameSystemsRepository) GetCurated() ([]dtos.GameSystem, error) {
+func (r *gameSystemsRepository) GetCurated(ctx context.Context) ([]dtos.GameSystem, error) {
 	query, args, err := r.psql.
 		Select(gameSystemColumns...).
 		From("game_systems gs").
@@ -40,7 +40,7 @@ func (r *gameSystemsRepository) GetCurated() ([]dtos.GameSystem, error) {
 		return nil, fmt.Errorf("build curated query: %w", err)
 	}
 
-	rows, err := r.db.Query(context.Background(), query, args...)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query curated systems: %w", err)
 	}
@@ -59,7 +59,7 @@ func (r *gameSystemsRepository) GetCurated() ([]dtos.GameSystem, error) {
 	return systems, nil
 }
 
-func (r *gameSystemsRepository) Search(q string) ([]dtos.GameSystem, error) {
+func (r *gameSystemsRepository) Search(ctx context.Context, q string) ([]dtos.GameSystem, error) {
 	query, args, err := r.psql.
 		Select(gameSystemColumns...).
 		From("game_systems gs").
@@ -73,7 +73,7 @@ func (r *gameSystemsRepository) Search(q string) ([]dtos.GameSystem, error) {
 		return nil, fmt.Errorf("build search query: %w", err)
 	}
 
-	rows, err := r.db.Query(context.Background(), query, args...)
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query search systems: %w", err)
 	}
@@ -92,18 +92,18 @@ func (r *gameSystemsRepository) Search(q string) ([]dtos.GameSystem, error) {
 	return systems, nil
 }
 
-func (r *gameSystemsRepository) AddGameSystem(params *CreateGameSystemParams) (*dtos.GameSystem, error) {
+func (r *gameSystemsRepository) AddGameSystem(ctx context.Context, params *CreateGameSystemParams) (*dtos.GameSystem, error) {
 	sql, args, err := r.psql.Insert("game_systems").
 		Columns("slug", "canonical_name", "badge_color", "is_curated").
 		Values(params.Slug, params.Name, params.BadgeColor, params.IsCurated).
-		Suffix("RETURNING slug, canonical_name, COALESCE(badge_color, ''), is_curated").
+		Suffix("RETURNING id, slug, canonical_name, COALESCE(badge_color, ''), is_curated").
 		ToSql()
 
 	if err != nil {
 		return nil, fmt.Errorf("add game system: %w", err)
 	}
 	
-	row := r.db.QueryRow(context.Background(), sql, args...)
+	row := r.db.QueryRow(ctx, sql, args...)
 	gs := &dtos.GameSystem{}
 	if err := scanGameSystem(row, gs); err != nil {
 		var pgErr *pgconn.PgError

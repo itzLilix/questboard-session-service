@@ -10,8 +10,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func Connect(connectionString string) (*pgxpool.Pool, error) {
-	return pgxpool.New(context.Background(), connectionString)
+func Connect(connectionString string, minConns, maxConns int32) (*pgxpool.Pool, error) {
+	config, err := pgxpool.ParseConfig(connectionString)
+	if err != nil {
+		return nil, err
+	}
+	config.MaxConns = maxConns
+	config.MinConns = minConns
+	return pgxpool.NewWithConfig(context.Background(), config)
 }
 
 func RunMigrations(connectionString string) error {

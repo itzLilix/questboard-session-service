@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -10,9 +11,9 @@ import (
 )
 
 type GameSystemsUsecase interface {
-	GetCurated() ([]dtos.GameSystem, error)
-	Search(query string) ([]dtos.GameSystem, error)
-	AddUserSystem(input *CreateGameSystemInput) (*dtos.GameSystem, error)
+	GetCurated(ctx context.Context) ([]dtos.GameSystem, error)
+	Search(ctx context.Context, query string) ([]dtos.GameSystem, error)
+	AddUserSystem(ctx context.Context, input *CreateGameSystemInput) (*dtos.GameSystem, error)
 }
 
 type gameSystemsUsecase struct {
@@ -27,23 +28,23 @@ func NewGameSystemsUsecase(repo GameSystemsRepository) GameSystemsUsecase {
 	return &gameSystemsUsecase{repo: repo}
 }
 
-func (uc *gameSystemsUsecase) GetCurated() ([]dtos.GameSystem, error) {
-	systems, err := uc.repo.GetCurated()
+func (uc *gameSystemsUsecase) GetCurated(ctx context.Context) ([]dtos.GameSystem, error) {
+	systems, err := uc.repo.GetCurated(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get curated systems: %w: %v", ErrInternal, err)
 	}
 	return systems, nil
 }
 
-func (uc *gameSystemsUsecase) Search(query string) ([]dtos.GameSystem, error) {
-	systems, err := uc.repo.Search(query)
+func (uc *gameSystemsUsecase) Search(ctx context.Context, query string) ([]dtos.GameSystem, error) {
+	systems, err := uc.repo.Search(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("search systems: %w: %v", ErrInternal, err)
 	}
 	return systems, nil
 }
 
-func (uc *gameSystemsUsecase) AddUserSystem(input *CreateGameSystemInput) (*dtos.GameSystem, error) {
+func (uc *gameSystemsUsecase) AddUserSystem(ctx context.Context, input *CreateGameSystemInput) (*dtos.GameSystem, error) {
 	if input.Name == "" {
 		return nil, ErrInvalidData
 	}
@@ -56,7 +57,7 @@ func (uc *gameSystemsUsecase) AddUserSystem(input *CreateGameSystemInput) (*dtos
 		BadgeColor: nil,
 	}
 	
-	gs, err := uc.repo.AddGameSystem(userSystem)
+	gs, err := uc.repo.AddGameSystem(ctx, userSystem)
 	if err != nil {
 		if errors.Is(err, infrastructure.ErrAlreadyExists) {
 			return nil, ErrSystemAlreadyExists
