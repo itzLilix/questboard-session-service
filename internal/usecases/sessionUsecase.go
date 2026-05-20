@@ -50,8 +50,6 @@ func NewSessionUsecase(repo SessionRepository, profile ProfileClient) SessionUse
 	return &sessionUsecase{repo: repo, profile: profile}
 }
 
-// enrich fetches UserBrief for the given ids. On profile-service failure it
-// logs and returns an empty map — callers degrade gracefully rather than 5xx.
 func (uc *sessionUsecase) enrich(ctx context.Context, ids []string) map[string]dtos.UserBrief {
 	briefs, err := uc.profile.GetBriefs(ctx, ids)
 	if err != nil {
@@ -72,7 +70,7 @@ type ListSessionsInput struct {
 	Scope    dtos.SessionScope
 	MasterID string
 	PlayerID string
-	Status   []string // raw values from handler; usecase expands "public" preset
+	Status   []string
 
 	Search       string
 	Format       string
@@ -137,85 +135,18 @@ type UploadFileInput struct {
 // --- sessions -----------------------------------------------------------
 
 func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput) (dtos.SessionListResponse, error) {
-	scope := in.Scope
-	if scope == "" {
-		scope = dtos.ScopeCatalog
+	params, err := validateListSessions(&in)
+	if err != nil {
+		return dtos.SessionListResponse{}, err
 	}
-	fmt.Println(in)
-	// resolve target user and whether it's the viewer
-	var (
-		masterID, playerID string
-		targetIsViewer     bool
-	)
-	switch scope {
-		case dtos.ScopeCatalog:
-			targetIsViewer = false
-		case dtos.ScopeMastering:
-			if in.MasterID != "" {
-				masterID = in.MasterID
-				targetIsViewer = in.Viewer.Is(masterID)
-			} else {
-				if !in.Viewer.IsAuthenticated() {
-					return dtos.SessionListResponse{}, ErrForbidden
-				}
-				masterID = in.Viewer.UserID
-				targetIsViewer = true
-			}
-		case dtos.ScopePlaying:
-			if in.PlayerID != "" {
-				playerID = in.PlayerID
-				targetIsViewer = in.Viewer.Is(playerID)
-			} else {
-				if !in.Viewer.IsAuthenticated() {
-					return dtos.SessionListResponse{}, ErrForbidden
-				}
-				playerID = in.Viewer.UserID
-				targetIsViewer = true
-			}
-		default:
-			return dtos.SessionListResponse{}, fmt.Errorf("%w: unknown scope %q", ErrInvalidData, scope)
-	}
-
-	statuses := resolveStatusFilter(in.Status, scope, targetIsViewer)
-	if len(statuses) == 0 {
+	if len(params.Status) == 0 {
 		return dtos.SessionListResponse{Items: []dtos.Session{}, Users: map[string]dtos.UserBrief{}}, nil
-	}
-
-	limit := in.Limit
-	if limit <= 0 {
-		limit = 20
-	} else if limit > 100 {
-		limit = 100
-	}
-
-	params := infrastructure.ListSessionsParams{
-		Viewer:         in.Viewer,
-		Scope:          scope,
-		MasterID:       masterID,
-		PlayerID:       playerID,
-		Status:         statuses,
-		TargetIsViewer: targetIsViewer,
-		Search:         in.Search,
-		Format:         in.Format,
-		Type:           in.Type,
-		City:           in.City,
-		SystemID:       in.SystemID,
-		HasFreeSeats:   in.HasFreeSeats,
-		PriceMin:       in.PriceMin,
-		PriceMax:       in.PriceMax,
-		DateFrom:       in.DateFrom,
-		DateTo:         in.DateTo,
-		Sort:           in.Sort,
-		SortOrder:      in.SortOrder,
-		Cursor:         in.Cursor,
-		Limit:          limit,
 	}
 
 	items, nextCursor, err := uc.repo.List(ctx, params)
 	if err != nil {
 		return dtos.SessionListResponse{}, mapRepoErr("list sessions", err)
 	}
-	fmt.Println("hi")
 
 	masterIDs := make([]string, 0, len(items))
 	for _, s := range items {
@@ -242,7 +173,6 @@ func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Vi
 		}
 	}
 
-	// Drafts have no players in practice; skip the fetch.
 	var players []dtos.SessionPlayer
 	if s.Status != dtos.Draft {
 		players, err = uc.repo.ListPlayers(ctx, id)
@@ -415,7 +345,7 @@ func (uc *sessionUsecase) ChangeStatus(ctx context.Context, id string, v *entiti
 			return nil, ErrInvalidStatus
 	}
 
-	// publish-time completeness check: offline sessions must have an address
+	// offline sessions must have an address
 	if status == dtos.Published && existing.Format == dtos.Offline {
 		if existing.Location == nil || existing.Location.Address == "" {
 			return nil, fmt.Errorf("%w: offline sessions require an address before publish", ErrInvalidData)
@@ -553,9 +483,6 @@ func (uc *sessionUsecase) DeleteComment(ctx context.Context, commentID string, v
 
 const maxCardDataBatch = 50
 
-// GetCardData returns SessionCardData per requested master id. Every requested
-// id appears in the result (in the same order) — masters with no public
-// sessions get an entry with empty SystemStats and nil NextSession.
 func (uc *sessionUsecase) GetCardData(ctx context.Context, masterIDs []string) ([]dtos.SessionCardData, error) {
 	if len(masterIDs) == 0 {
 		return []dtos.SessionCardData{}, nil
@@ -564,7 +491,6 @@ func (uc *sessionUsecase) GetCardData(ctx context.Context, masterIDs []string) (
 		return nil, fmt.Errorf("%w: at most %d masterId values per request", ErrInvalidData, maxCardDataBatch)
 	}
 
-	// dedupe while preserving order
 	seen := make(map[string]struct{}, len(masterIDs))
 	deduped := make([]string, 0, len(masterIDs))
 	for _, id := range masterIDs {

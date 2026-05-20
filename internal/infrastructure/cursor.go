@@ -16,30 +16,24 @@ import (
 // Sort + SortOrder are validated against the current request at applyCursor
 // time so paginating with a different sort produces cursor.ErrInvalidCursor.
 type sessionCursor struct {
-	Sort        string     `json:"s"`
-	SortOrder   string     `json:"o"` // "asc" or "desc"
+	Sort        dtos.SessionListSort     `json:"s"`
+	SortOrder   dtos.SortOrder     `json:"o"` 
 	ScheduledAt *time.Time `json:"sa,omitempty"`
 	CreatedAt   *time.Time `json:"c,omitempty"`
 	Price       *float64   `json:"p,omitempty"`
 	Title       *string    `json:"t,omitempty"`
+	System      *string    `json:"sy,omitempty"`
 	ID          string     `json:"id"`
-}
-
-func orderString(asc bool) string {
-	if asc {
-		return "asc"
-	}
-	return "desc"
 }
 
 // applyCursor adds the keyset-pagination WHERE clause to q based on the
 // previous page's cursor. nil cursor → unchanged q. Sort/order mismatch
 // between cursor and current request → cursor.ErrInvalidCursor.
-func applyCursor(q sq.SelectBuilder, c *sessionCursor, sortKey string, asc bool) (sq.SelectBuilder, error) {
+func applyCursor(q sq.SelectBuilder, c *sessionCursor, sortKey dtos.SessionListSort, sortOrder dtos.SortOrder) (sq.SelectBuilder, error) {
 	if c == nil {
 		return q, nil
 	}
-	if c.Sort != sortKey || c.SortOrder != orderString(asc) {
+	if c.Sort != sortKey || c.SortOrder != sortOrder {
 		return q, cursor.ErrInvalidCursor
 	}
 
@@ -49,27 +43,27 @@ func applyCursor(q sq.SelectBuilder, c *sessionCursor, sortKey string, asc bool)
 	}
 
 	op := "<"
-	if asc {
+	if sortOrder == dtos.SortAsc {
 		op = ">"
 	}
 
 	switch sortKey {
-	case "scheduled_at":
+	case dtos.SortSessionScheduledAt:
 		if c.ScheduledAt == nil {
 			return q, cursor.ErrInvalidCursor
 		}
 		return q.Where(fmt.Sprintf("(%s, s.id) %s (?, ?)", sortCol, op), *c.ScheduledAt, c.ID), nil
-	case "created_at":
+	case dtos.SortSessionCreatedAt:
 		if c.CreatedAt == nil {
 			return q, cursor.ErrInvalidCursor
 		}
 		return q.Where(fmt.Sprintf("(%s, s.id) %s (?, ?)", sortCol, op), *c.CreatedAt, c.ID), nil
-	case "price":
+	case dtos.SortSessionPrice:
 		if c.Price == nil {
 			return q, cursor.ErrInvalidCursor
 		}
 		return q.Where(fmt.Sprintf("(%s, s.id) %s (?, ?)", sortCol, op), *c.Price, c.ID), nil
-	case "title":
+	case dtos.SortSessionTitle:
 		if c.Title == nil {
 			return q, cursor.ErrInvalidCursor
 		}
@@ -81,28 +75,31 @@ func applyCursor(q sq.SelectBuilder, c *sessionCursor, sortKey string, asc bool)
 // buildNextCursor builds the cursor string from the last visible row of the
 // current page. Returns "" when last is the empty value (caller should not
 // have called it in that case).
-func buildNextCursor(last dtos.Session, sortKey string, asc bool) (string, error) {
+func buildNextCursor(last dtos.Session, sortKey dtos.SessionListSort, sortOrder dtos.SortOrder) (string, error) {
 	c := sessionCursor{
 		Sort:      sortKey,
-		SortOrder: orderString(asc),
+		SortOrder: sortOrder,
 		ID:        last.Id,
 	}
 	switch sortKey {
-	case "scheduled_at":
+	case dtos.SortSessionScheduledAt:
 		if last.ScheduledAt == nil {
 			return "", errors.New("build next cursor: scheduled_at sort requires non-null ScheduledAt")
 		}
 		v := *last.ScheduledAt
 		c.ScheduledAt = &v
-	case "created_at":
+	case dtos.SortSessionCreatedAt:
 		v := last.CreatedAt
 		c.CreatedAt = &v
-	case "price":
+	case dtos.SortSessionPrice:
 		v := last.Price
 		c.Price = &v
-	case "title":
+	case dtos.SortSessionTitle:
 		v := last.Title
 		c.Title = &v
+	case dtos.SortSessionSystem:
+		v := last.System.Name
+		c.System = &v
 	}
 	return cursor.EncodeCursor(c)
 }

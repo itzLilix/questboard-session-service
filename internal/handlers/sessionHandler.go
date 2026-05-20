@@ -34,7 +34,7 @@ type SessionFilter struct {
 	Scope    dtos.SessionScope `query:"scope"`
 	MasterID string            `query:"masterId"`
 	PlayerID string            `query:"playerId"`
-	Status   []string          `query:"status"` // repeated; accepts real statuses + "public" preset
+	Status   []string          `query:"status"`
 
 	Search       string `query:"search"`
 	Format       string `query:"format"`

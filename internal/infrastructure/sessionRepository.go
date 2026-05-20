@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
@@ -30,8 +29,8 @@ type ListSessionsParams struct {
 	TargetIsViewer bool
 
 	Search       string
-	Format       string
-	Type         string
+	Format       dtos.SessionFormat
+	Type         dtos.SessionType
 	City         string
 	SystemID     string
 	HasFreeSeats bool
@@ -39,8 +38,8 @@ type ListSessionsParams struct {
 	PriceMax     *float64
 	DateFrom     *time.Time
 	DateTo       *time.Time
-	Sort         string
-	SortOrder    string
+	Sort         dtos.SessionListSort
+	SortOrder    dtos.SortOrder
 	Cursor       string
 	Limit        int
 }
@@ -107,15 +106,15 @@ func NewSessionRepository(db *pgxpool.Pool, psql sq.StatementBuilderType) *sessi
 
 // --- sessions ---------------------------------------------------------------
 
-var sortColumns = map[string]string{
-	"scheduled_at": "s.scheduled_at",
-	"created_at":   "s.created_at",
-	"price":        "s.price",
-	"title":        "s.title",
+var sortColumns = map[dtos.SessionListSort]string{
+	dtos.SortSessionScheduledAt: "s.scheduled_at",
+	dtos.SortSessionCreatedAt:   "s.created_at",
+	dtos.SortSessionPrice:       "s.price",
+	dtos.SortSessionTitle:       "s.title",
+	dtos.SortSessionSystem:      "gs.is_curated, gs.canonical_name",
 }
 
 func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]dtos.Session, string, error) {
-	fmt.Println(p)
 	q := r.psql.
 		Select(sessionColumns...).
 		From("sessions s").
@@ -200,31 +199,29 @@ func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]d
 	}
 	sortCol := sortColumns[sortKey]
 
-	asc := p.Scope == dtos.ScopeCatalog // catalog default ASC, others DESC
-	if p.SortOrder != "" {
-		asc = strings.EqualFold(p.SortOrder, "asc")
+	if p.Scope == dtos.ScopeCatalog {
+		p.SortOrder = dtos.SortAsc
 	}
 
-	// --- cursor (keyset) ---
+	// --- cursor ---
 	cursor, err := cursor.DecodeCursor[sessionCursor](p.Cursor)
 	if err != nil {
 		return nil, "", err
 	}
-	q, err = applyCursor(q, cursor, sortKey, asc)
+	q, err = applyCursor(q, cursor, sortKey, p.SortOrder)
 	if err != nil {
 		return nil, "", err
 	}
 
 	// --- ORDER BY + tiebreaker ---
-	dir := "ASC"
+	
 	nulls := "NULLS LAST"
-	if !asc {
-		dir = "DESC"
+	if p.SortOrder == dtos.SortDesc {
 		nulls = "NULLS FIRST"
 	}
 	q = q.OrderBy(
-		fmt.Sprintf("%s %s %s", sortCol, dir, nulls),
-		fmt.Sprintf("s.id %s", dir),
+		fmt.Sprintf("%s %s %s", sortCol, p.SortOrder, nulls),
+		fmt.Sprintf("s.id %s", p.SortOrder),
 	)
 
 	q = q.Limit(uint64(p.Limit + 1))
@@ -256,13 +253,12 @@ func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]d
 	var nextCursor string
 	if len(items) > p.Limit {
 		items = items[:p.Limit] // drop the sentinel +1 row
-		nc, err := buildNextCursor(items[p.Limit-1], sortKey, asc)
+		nc, err := buildNextCursor(items[p.Limit-1], sortKey, p.SortOrder)
 		if err != nil {
 			return nil, "", fmt.Errorf("encode next cursor: %w", err)
 		}
 		nextCursor = nc
 	}
-	fmt.Println(query)
 	return items, nextCursor, nil
 }
 
@@ -315,7 +311,6 @@ func (r *sessionRepository) Create(ctx context.Context, p *CreateSessionParams) 
 	if err := r.db.QueryRow(ctx, insert, args...).Scan(&newID); err != nil {
 		return nil, fmt.Errorf("insert session: %w", err)
 	}
-	fmt.Println(newID)
 
 	return r.GetByID(ctx, newID)
 }
@@ -340,9 +335,6 @@ func (r *sessionRepository) Update(ctx context.Context, id string, p *UpdateSess
 	}
 	if p.Format != nil {
 		upd = upd.Set("format", *p.Format)
-		// transitioning to online: location is no longer meaningful — clear it
-		// in the same UPDATE so the DB never carries phantom address data for
-		// online sessions (would otherwise leak into city filters and admin views).
 		if *p.Format == dtos.Online {
 			upd = upd.Set("address", nil).Set("lat", nil).Set("lng", nil)
 		}

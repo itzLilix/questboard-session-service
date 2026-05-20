@@ -29,9 +29,6 @@ func NewHTTPProfileClient(baseURL string) *HTTPProfileClient {
 	}
 }
 
-// GetBriefs fetches minimal user info for the given ids. Missing ids are simply
-// absent from the returned map — callers should treat absence as "unknown user".
-// Order of ids does not matter; duplicates are deduped.
 func (c *HTTPProfileClient) GetBriefs(ctx context.Context, ids []string) (map[string]dtos.UserBrief, error) {
 	if len(ids) == 0 {
 		return map[string]dtos.UserBrief{}, nil
@@ -58,7 +55,7 @@ func (c *HTTPProfileClient) GetBriefs(ctx context.Context, ids []string) (map[st
 
 	q := url.Values{}
 	q.Set("ids", strings.Join(deduped, ","))
-	endpoint := c.baseURL + "/users?" + q.Encode()
+	endpoint := c.baseURL + "/internal/briefs?" + q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {

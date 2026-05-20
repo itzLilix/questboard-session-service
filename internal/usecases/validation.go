@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
 	"github.com/itzLilix/questboard-shared/dtos"
 )
 
@@ -31,79 +33,143 @@ func validateCreateSession(in *CreateSessionInput) error {
 	return nil
 }
 
-func isValidSessionStatus(s dtos.SessionStatus) bool {
+func validateListSessions(in *ListSessionsInput) (infrastructure.ListSessionsParams, error) {
+	// --- scope ---------------------------------------------------------------
+	scope := in.Scope
+	if scope == "" {
+		scope = dtos.ScopeCatalog
+	}
+	if scope != dtos.ScopeCatalog && scope != dtos.ScopeMastering && scope != dtos.ScopePlaying {
+		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: unknown scope %q", ErrInvalidData, scope)
+	}
+
+	// --- target user + targetIsViewer ----------------------------------------
+	var masterID, playerID string
+	targetIsViewer := false
+	switch scope {
+	case dtos.ScopeMastering:
+		if in.MasterID != "" {
+			masterID = in.MasterID
+			targetIsViewer = in.Viewer.Is(masterID)
+		} else {
+			if !in.Viewer.IsAuthenticated() {
+				return infrastructure.ListSessionsParams{}, ErrForbidden
+			}
+			masterID = in.Viewer.UserID
+			targetIsViewer = true
+		}
+	case dtos.ScopePlaying:
+		if in.PlayerID != "" {
+			playerID = in.PlayerID
+			targetIsViewer = in.Viewer.Is(playerID)
+		} else {
+			if !in.Viewer.IsAuthenticated() {
+				return infrastructure.ListSessionsParams{}, ErrForbidden
+			}
+			playerID = in.Viewer.UserID
+			targetIsViewer = true
+		}
+	}
+
+	// --- format / type strings → typed enums ---------------------------------
+	format := dtos.SessionFormat(in.Format)
+	if in.Format != "" && format != dtos.Online && format != dtos.Offline {
+		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: invalid format %q", ErrInvalidData, in.Format)
+	}
+	stype := dtos.SessionType(in.Type)
+	if in.Type != "" && stype != dtos.OneshotType && stype != dtos.CampaignType {
+		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: invalid type %q", ErrInvalidData, in.Type)
+	}
+
+	// --- sort key ------------------------------------------------------------
+	var sort dtos.SessionListSort
+	if in.Sort == "" {
+		if scope == dtos.ScopeCatalog {
+			sort = dtos.SortSessionScheduledAt
+		} else {
+			sort = dtos.SortSessionCreatedAt
+		}
+	} else {
+		sort = dtos.SessionListSort(in.Sort)
+		if !isValidSessionSort(sort) {
+			return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: invalid sort %q", ErrInvalidData, in.Sort)
+		}
+	}
+
+	// --- sort order ----------------------------------------------------------
+	var order dtos.SortOrder
+	switch strings.ToUpper(in.SortOrder) {
+	case "":
+		if scope == dtos.ScopeCatalog {
+			order = dtos.SortAsc
+		} else {
+			order = dtos.SortDesc
+		}
+	case "ASC":
+		order = dtos.SortAsc
+	case "DESC":
+		order = dtos.SortDesc
+	default:
+		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: invalid order %q", ErrInvalidData, in.SortOrder)
+	}
+
+	// --- price and date range check ------------------------------------------
+	if in.PriceMin != nil && *in.PriceMin < 0 {
+		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: priceMin must be >= 0", ErrInvalidData)
+	}
+	if in.PriceMax != nil && *in.PriceMax < 0 {
+		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: priceMax must be >= 0", ErrInvalidData)
+	}
+	if in.PriceMin != nil && in.PriceMax != nil && *in.PriceMin > *in.PriceMax {
+		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: priceMin must be <= priceMax", ErrInvalidData)
+	}
+	if in.DateFrom != nil && in.DateTo != nil && !in.DateFrom.Before(*in.DateTo) {
+		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: dateFrom must be < dateTo", ErrInvalidData)
+	}
+
+	// --- limit ---------------------------------------------------------
+	limit := in.Limit
+	if limit <= 0 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+
+	// --- status filter --------------
+	statuses := resolveStatusFilter(in.Status, scope, targetIsViewer)
+
+	return infrastructure.ListSessionsParams{
+		Viewer:         in.Viewer,
+		Scope:          scope,
+		MasterID:       masterID,
+		PlayerID:       playerID,
+		Status:         statuses,
+		TargetIsViewer: targetIsViewer,
+		Search:         in.Search,
+		Format:         format,
+		Type:           stype,
+		City:           in.City,
+		SystemID:       in.SystemID,
+		HasFreeSeats:   in.HasFreeSeats,
+		PriceMin:       in.PriceMin,
+		PriceMax:       in.PriceMax,
+		DateFrom:       in.DateFrom,
+		DateTo:         in.DateTo,
+		Sort:           sort,
+		SortOrder:      order,
+		Cursor:         in.Cursor,
+		Limit:          limit,
+	}, nil
+}
+
+func isValidSessionSort(s dtos.SessionListSort) bool {
 	switch s {
-	case dtos.Draft, dtos.Published, dtos.Ongoing, dtos.Completed, dtos.Cancelled:
+	case dtos.SortSessionScheduledAt,
+		dtos.SortSessionCreatedAt,
+		dtos.SortSessionPrice,
+		dtos.SortSessionTitle,
+		dtos.SortSessionSystem:
 		return true
 	}
 	return false
-}
-
-// hasAdvertisedChanges returns true if the edit touches any field that is part
-// of what players see before joining. Used both for terminal-state lockout and
-// to decide whether a notification should fire.
-func hasAdvertisedChanges(in *EditSessionInput) bool {
-	return in.Format != nil ||
-		in.SystemID != nil ||
-		in.ScheduledAt != nil ||
-		in.DurationHours != nil ||
-		in.Address != nil ||
-		in.Lat != nil ||
-		in.Lng != nil ||
-		in.MaxSeats != nil ||
-		in.Price != nil ||
-		in.Availability != nil
-}
-
-// publicPresetStatuses is what dtos.StatusPresetPublic expands to.
-var publicPresetStatuses = []dtos.SessionStatus{
-	dtos.Published, dtos.Ongoing, dtos.Completed,
-}
-
-// resolveStatusFilter expands the "public" preset, dedupes, and applies the
-// scope/target allowlist (silently dropping disallowed values to avoid leaky
-// existence checks).
-//
-// If raw is empty, defaults to ["public"] (drafts/cancelled never appear on
-// profile views by default).
-//
-// Allowlist:
-//   - catalog or target!=viewer: {published, ongoing, completed} only
-//   - mastering/playing with target=viewer: any status allowed
-func resolveStatusFilter(raw []string, scope dtos.SessionScope, targetIsViewer bool) []dtos.SessionStatus {
-	if len(raw) == 0 {
-		raw = []string{dtos.StatusPresetPublic}
-	}
-
-	allowAll := targetIsViewer && (scope == dtos.ScopeMastering || scope == dtos.ScopePlaying)
-
-	seen := make(map[dtos.SessionStatus]struct{}, 5)
-	add := func(s dtos.SessionStatus) {
-		switch s {
-		case dtos.Published, dtos.Ongoing, dtos.Completed:
-			seen[s] = struct{}{}
-		case dtos.Draft, dtos.Cancelled:
-			if allowAll {
-				seen[s] = struct{}{}
-			}
-			// else silently drop
-		}
-		// unknown values silently dropped
-	}
-
-	for _, v := range raw {
-		if v == dtos.StatusPresetPublic {
-			for _, s := range publicPresetStatuses {
-				add(s)
-			}
-			continue
-		}
-		add(dtos.SessionStatus(v))
-	}
-
-	out := make([]dtos.SessionStatus, 0, len(seen))
-	for s := range seen {
-		out = append(out, s)
-	}
-	return out
 }
