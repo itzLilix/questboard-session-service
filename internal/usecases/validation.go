@@ -8,27 +8,42 @@ import (
 	"github.com/itzLilix/questboard-shared/dtos"
 )
 
-func validateCreateSession(in *CreateSessionInput) error {
-	if in.Title == "" || in.Format == "" || in.SystemID == "" || in.MaxSeats <= 0 {
+func validateSession(in *SessionInput) error {
+	if in.MaxSeats != nil && *in.MaxSeats <= 0 {
 		return fmt.Errorf("%w: missing required field", ErrInvalidData)
 	}
-	if in.MaxSeats > 50 {
-		return fmt.Errorf("%w: maxSeats must be <= 50", ErrInvalidData)
+	if in.Title != nil && len(*in.Title) > 100 {
+		return fmt.Errorf("%w: title must be <= 100 characters", ErrInvalidData)
 	}
-	if in.Price < 0 {
+	if in.Description != nil && len(*in.Description) > 2000 {
+		return fmt.Errorf("%w: description must be <= 2000 characters", ErrInvalidData)
+	}
+	if in.MaxSeats != nil{
+		if *in.MaxSeats <= 0 {
+			return fmt.Errorf("%w: maxSeats must be > 0", ErrInvalidData)
+		}
+		if *in.MaxSeats > 50 {
+			return fmt.Errorf("%w: maxSeats must be <= 50", ErrInvalidData)
+		}
+	}
+	if in.Price != nil && *in.Price < 0 {
 		return fmt.Errorf("%w: price must be >= 0", ErrInvalidData)
 	}
 	if in.DurationHours != nil && *in.DurationHours <= 0 {
 		return fmt.Errorf("%w: durationHours must be > 0", ErrInvalidData)
 	}
-	if in.Format != dtos.Online && in.Format != dtos.Offline {
-		return fmt.Errorf("%w: invalid format", ErrInvalidData)
+	if in.ScheduledAt != nil && in.ScheduledAt.IsZero() {
+		return fmt.Errorf("%w: scheduledAt must be a valid date", ErrInvalidData)
 	}
-	if in.Availability != "" &&
-		in.Availability != dtos.Open &&
-		in.Availability != dtos.Application &&
-		in.Availability != dtos.Private {
-		return fmt.Errorf("%w: invalid availability", ErrInvalidData)
+	if in.Format != nil {
+		if *in.Format != dtos.Online && *in.Format != dtos.Offline {
+			return fmt.Errorf("%w: invalid format", ErrInvalidData)
+		}
+	}
+	if in.Availability != nil {
+		if *in.Availability != dtos.Open && *in.Availability != dtos.Application && *in.Availability != dtos.Private {
+			return fmt.Errorf("%w: invalid availability", ErrInvalidData)
+		}
 	}
 	return nil
 }

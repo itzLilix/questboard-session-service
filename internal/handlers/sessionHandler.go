@@ -173,7 +173,7 @@ func (h *sessionHandler) create(c fiber.Ctx) error {
 		DurationHours *float64                  `json:"durationHours,omitempty"`
 		Price         *float64                  `json:"price,omitempty"`
 		Availability  *dtos.SessionAvailability `json:"availability,omitempty"`
-		PreviewURL    *string                   `json:"previewUrl,omitempty"`
+		//PreviewURL    *string                   `json:"previewUrl,omitempty"`
 		MasterNotes   *string                   `json:"masterNotes,omitempty"`
 	}
 
@@ -183,27 +183,27 @@ func (h *sessionHandler) create(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	in := usecase.CreateSessionInput{
-		Viewer:        entities.BuildViewerFromCtx(c),
-		Title:         req.Title,
-		Format:        req.Format,
-		SystemID:      req.SystemID,
+	maxSeats := int16(req.MaxSeats)
+	in := usecase.SessionInput{
+		Title:         &req.Title,
+		Format:        &req.Format,
+		SystemID:      &req.SystemID,
 		ScheduledAt:   req.ScheduledAt,
-		MaxSeats:      int16(req.MaxSeats),
-		Description:   derefOr(req.Description, ""),
-		MasterNotes:   derefOr(req.MasterNotes, ""),
-		PreviewURL:    derefOr(req.PreviewURL, ""),
-		Price:         derefOr(req.Price, 0),
-		Availability:  derefOr(req.Availability, dtos.Open),
+		MaxSeats:      &maxSeats,
+		Description:   req.Description,
+		MasterNotes:   req.MasterNotes,
+		//PreviewURL:    &req.PreviewURL,
+		Price:         req.Price,
+		Availability:  req.Availability,
 		DurationHours: req.DurationHours,
 	}
 	if req.Location != nil {
-		in.Address = req.Location.Address
+		in.Address = &req.Location.Address
 		in.Lat = &req.Location.Lat
 		in.Lng = &req.Location.Lng
 	}
 
-	session, err := h.uc.Create(c.Context(), in)
+	session, err := h.uc.Create(c.Context(), in, entities.BuildViewerFromCtx(c))
 	if err != nil {
 		h.log.Error().Err(err).Msg("create session failed")
 		return c.SendStatus(statusFor(err))
@@ -233,11 +233,11 @@ func (h *sessionHandler) edit(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	in := usecase.EditSessionInput{
+	in := usecase.SessionInput{
 		Title:         req.Title,
 		Description:   req.Description,
 		MasterNotes:   req.MasterNotes,
-		PreviewURL:    req.PreviewURL,
+		//PreviewURL:    req.PreviewURL,
 		Format:        req.Format,
 		Availability:  req.Availability,
 		SystemID:      req.SystemID,

@@ -14,8 +14,8 @@ import (
 type SessionUsecase interface {
 	List(ctx context.Context, in ListSessionsInput) (dtos.SessionListResponse, error)
 	GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.SessionResponse, error)
-	Create(ctx context.Context, in CreateSessionInput) (*dtos.Session, error)
-	Edit(ctx context.Context, id string, v *entities.Viewer, in EditSessionInput) (*dtos.Session, error)
+	Create(ctx context.Context, in SessionInput, v *entities.Viewer) (*dtos.Session, error)
+	Edit(ctx context.Context, id string, v *entities.Viewer, in SessionInput) (*dtos.Session, error)
 	Delete(ctx context.Context, id string, v *entities.Viewer) error
 	ChangeStatus(ctx context.Context, id string, v *entities.Viewer, status dtos.SessionStatus) (*dtos.Session, error)
 
@@ -88,30 +88,12 @@ type ListSessionsInput struct {
 	Limit        int
 }
 
-type CreateSessionInput struct {
-	Viewer        *entities.Viewer
-	Title         string
-	Description   string
-	Address       string
-	MasterNotes   string
-	PreviewURL    string
-	Format        dtos.SessionFormat
-	Availability  dtos.SessionAvailability
-	SystemID      string
-	ScheduledAt   *time.Time
-	DurationHours *float64
-	Lat           *float64
-	Lng           *float64
-	MaxSeats      int16
-	Price         float64
-}
-
-type EditSessionInput struct {
+type SessionInput struct {
 	Title         *string
 	Description   *string
 	Address       *string
 	MasterNotes   *string
-	PreviewURL    *string
+	//PreviewURL    *string
 	Format        *dtos.SessionFormat
 	Availability  *dtos.SessionAvailability
 	SystemID      *string
@@ -133,6 +115,7 @@ type UploadFileInput struct {
 }
 
 // --- sessions -----------------------------------------------------------
+var DEFAULT_AVAILABILITY = dtos.Open 
 
 func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput) (dtos.SessionListResponse, error) {
 	params, err := validateListSessions(&in)
@@ -194,31 +177,38 @@ func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Vi
 	return &dtos.SessionResponse{Session: *s, Players: players, Users: users}, nil
 }
 
-func (uc *sessionUsecase) Create(ctx context.Context, in CreateSessionInput) (*dtos.Session, error) {
-	if !in.Viewer.IsAuthenticated() {
+func (uc *sessionUsecase) Create(ctx context.Context, in SessionInput, v *entities.Viewer) (*dtos.Session, error) {
+	if !v.IsAuthenticated() {
 		return nil, ErrForbidden
 	}
-	if err := validateCreateSession(&in); err != nil {
+	if in.Title == nil || in.Format == nil || in.SystemID == nil || in.MaxSeats == nil {
+		return nil, fmt.Errorf("%w: missing required field", ErrInvalidData)
+	}
+	if in.Availability == nil {
+		in.Availability = &DEFAULT_AVAILABILITY
+	}
+	if err := validateSession(&in); err != nil {
 		return nil, err
 	}
 
 	params := &infrastructure.CreateSessionParams{
-		Title:         in.Title,
-		Description:   in.Description,
-		Address:       in.Address,
-		MasterNotes:   in.MasterNotes,
-		PreviewURL:    in.PreviewURL,
-		Format:        in.Format,
-		Availability:  in.Availability,
-		SystemID:      in.SystemID,
-		MasterID:      in.Viewer.UserID,
+		Title:         *in.Title,
+		Description:   inOr(in.Description, ""),
+		MasterNotes:   inOr(in.MasterNotes, ""),
+		//PreviewURL:    in.PreviewURL,
+		Format:        *in.Format,
+		Availability:  inOr(in.Availability, DEFAULT_AVAILABILITY),
+		SystemID:      *in.SystemID,
+		MasterID:      v.UserID,
 		ScheduledAt:   in.ScheduledAt,
 		DurationHours: in.DurationHours,
+		Address:       inOr(in.Address, ""),
 		Lat:           in.Lat,
 		Lng:           in.Lng,
-		MaxSeats:      in.MaxSeats,
-		Price:         in.Price,
+		MaxSeats:      *in.MaxSeats,
+		Price:         inOr(in.Price, 0),
 	}
+
 	if params.Availability == "" {
 		params.Availability = dtos.Open
 	}
@@ -230,9 +220,12 @@ func (uc *sessionUsecase) Create(ctx context.Context, in CreateSessionInput) (*d
 	return s, nil
 }
 
-func (uc *sessionUsecase) Edit(ctx context.Context, id string, v *entities.Viewer, in EditSessionInput) (*dtos.Session, error) {
+func (uc *sessionUsecase) Edit(ctx context.Context, id string, v *entities.Viewer, in SessionInput) (*dtos.Session, error) {
 	if !v.IsAuthenticated() {
 		return nil, ErrForbidden
+	}
+	if err := validateSession(&in); err != nil {
+		return nil, err
 	}
 
 	existing, err := uc.repo.GetByID(ctx, id)
@@ -265,7 +258,7 @@ func (uc *sessionUsecase) Edit(ctx context.Context, id string, v *entities.Viewe
 		Description:   in.Description,
 		Address:       in.Address,
 		MasterNotes:   in.MasterNotes,
-		PreviewURL:    in.PreviewURL,
+		//PreviewURL:    in.PreviewURL,
 		Format:        in.Format,
 		Availability:  in.Availability,
 		SystemID:      in.SystemID,
@@ -280,8 +273,7 @@ func (uc *sessionUsecase) Edit(ctx context.Context, id string, v *entities.Viewe
 		return nil, mapRepoErr("update session", err)
 	}
 
-	// TODO(notifications): push a "session updated" event to
-	// the players if the edit touched advertised fields on a published+ session.
+	// push a "session updated" event to the players
 	// if existing.Status != dtos.Draft && hasAdvertisedChanges(&in) {}
 
 	return updated, nil

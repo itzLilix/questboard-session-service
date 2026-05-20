@@ -2,6 +2,13 @@ package usecase
 
 import "github.com/itzLilix/questboard-shared/dtos"
 
+func inOr[T any](p *T, def T) T {
+	if p == nil {
+		return def
+	}
+	return *p
+}
+
 func isValidSessionStatus(s dtos.SessionStatus) bool {
 	switch s {
 	case dtos.Draft, dtos.Published, dtos.Ongoing, dtos.Completed, dtos.Cancelled:
@@ -10,7 +17,7 @@ func isValidSessionStatus(s dtos.SessionStatus) bool {
 	return false
 }
 
-func hasAdvertisedChanges(in *EditSessionInput) bool {
+func hasAdvertisedChanges(in *SessionInput) bool {
 	return in.Format != nil ||
 		in.SystemID != nil ||
 		in.ScheduledAt != nil ||
