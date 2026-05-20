@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -126,7 +125,6 @@ func (h *sessionHandler) list(c fiber.Ctx) error {
 	if resp.Users == nil {
 		resp.Users = map[string]dtos.UserBrief{}
 	}
-	fmt.Println(len(resp.Items))
 	return c.Status(fiber.StatusOK).JSON(resp)
 }
 

@@ -199,10 +199,6 @@ func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]d
 	}
 	sortCol := sortColumns[sortKey]
 
-	if p.Scope == dtos.ScopeCatalog {
-		p.SortOrder = dtos.SortAsc
-	}
-
 	// --- cursor ---
 	cursor, err := cursor.DecodeCursor[sessionCursor](p.Cursor)
 	if err != nil {
@@ -259,6 +255,7 @@ func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]d
 		}
 		nextCursor = nc
 	}
+	fmt.Println(query)
 	return items, nextCursor, nil
 }
 

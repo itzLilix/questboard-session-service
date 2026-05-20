@@ -115,11 +115,7 @@ func validateListSessions(in *ListSessionsInput) (infrastructure.ListSessionsPar
 	var order dtos.SortOrder
 	switch strings.ToUpper(in.SortOrder) {
 	case "":
-		if scope == dtos.ScopeCatalog {
-			order = dtos.SortAsc
-		} else {
-			order = dtos.SortDesc
-		}
+		order = dtos.SortAsc
 	case "ASC":
 		order = dtos.SortAsc
 	case "DESC":
@@ -127,6 +123,7 @@ func validateListSessions(in *ListSessionsInput) (infrastructure.ListSessionsPar
 	default:
 		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: invalid order %q", ErrInvalidData, in.SortOrder)
 	}
+	fmt.Printf("resolved sort: %s %s\n", sort, order)
 
 	// --- price and date range check ------------------------------------------
 	if in.PriceMin != nil && *in.PriceMin < 0 {
