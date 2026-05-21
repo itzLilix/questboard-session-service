@@ -255,7 +255,6 @@ func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]d
 		}
 		nextCursor = nc
 	}
-	fmt.Println(query)
 	return items, nextCursor, nil
 }
 

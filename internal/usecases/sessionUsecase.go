@@ -181,7 +181,10 @@ func (uc *sessionUsecase) Create(ctx context.Context, in SessionInput, v *entiti
 	if !v.IsAuthenticated() {
 		return nil, ErrForbidden
 	}
-	if in.Title == nil || in.Format == nil || in.SystemID == nil || in.MaxSeats == nil {
+	if in.Title == nil || *in.Title == "" ||
+	   in.Format == nil ||
+	   in.SystemID == nil || *in.SystemID == "" ||
+	   in.MaxSeats == nil {
 		return nil, fmt.Errorf("%w: missing required field", ErrInvalidData)
 	}
 	if in.Availability == nil {
@@ -207,10 +210,6 @@ func (uc *sessionUsecase) Create(ctx context.Context, in SessionInput, v *entiti
 		Lng:           in.Lng,
 		MaxSeats:      *in.MaxSeats,
 		Price:         inOr(in.Price, 0),
-	}
-
-	if params.Availability == "" {
-		params.Availability = dtos.Open
 	}
 
 	s, err := uc.repo.Create(ctx, params)
