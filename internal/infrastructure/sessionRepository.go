@@ -599,9 +599,6 @@ func (r *sessionRepository) GetSystemStats(ctx context.Context, masterIDs []stri
 	return out, nil
 }
 
-// GetNextSessions returns, per master, their next upcoming session
-// (published/ongoing, non-private, scheduled_at >= NOW()). Uses DISTINCT ON
-// to pick the earliest scheduled session per master in a single query.
 func (r *sessionRepository) GetNextSessions(ctx context.Context, masterIDs []string) (map[string]*dtos.NextSession, error) {
 	out := make(map[string]*dtos.NextSession, len(masterIDs))
 	if len(masterIDs) == 0 {
@@ -611,7 +608,7 @@ func (r *sessionRepository) GetNextSessions(ctx context.Context, masterIDs []str
 	query, args, err := r.psql.
 		Select(
 			"DISTINCT ON (s.master_id) s.master_id",
-			"s.scheduled_at", "s.format", "s.type",
+			"s.id", "s.scheduled_at", "s.format", "s.type",
 			"gs.id", "gs.slug", "gs.canonical_name", "COALESCE(gs.badge_color, '')", "gs.is_curated",
 		).
 		From("sessions s").
@@ -639,7 +636,7 @@ func (r *sessionRepository) GetNextSessions(ctx context.Context, masterIDs []str
 		)
 		if err := rows.Scan(
 			&masterID,
-			&next.ScheduledAt, &next.Format, &next.Type,
+			&next.Id, &next.ScheduledAt, &next.Format, &next.Type,
 			&next.System.Id, &next.System.Slug, &next.System.Name, &next.System.BadgeColor, &next.System.IsCurated,
 		); err != nil {
 			return nil, fmt.Errorf("scan next session: %w", err)
@@ -648,6 +645,62 @@ func (r *sessionRepository) GetNextSessions(ctx context.Context, masterIDs []str
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate next sessions: %w", err)
+	}
+	return out, nil
+}
+
+func (r *sessionRepository) CountMasterStat(ctx context.Context, masterId string) (int, error){
+	query, args, err := r.psql.
+		Select("COUNT(*)").
+		From("sessions s").
+		Where(sq.Eq{"s.master_id": masterId}).
+		Where(sq.NotEq{"s.status": []dtos.SessionStatus{dtos.Cancelled, dtos.Draft}}).
+		ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("build count master stat: %w", err)
+	}
+
+	var stat int
+	if err := r.db.QueryRow(ctx, query, args...).Scan(&stat); err != nil {
+		return 0, fmt.Errorf("query count master stat: %w", err)
+	}
+
+	return stat, nil;
+}
+
+func (r *sessionRepository) CountPlayersStats(ctx context.Context, sessionId string) (map[string]int, error){
+	out := make(map[string]int, 1)
+
+	query, args, err := r.psql.
+		Select("sp2.player_id", "COUNT(*)").
+		From("session_players sp1").
+		Join("session_players sp2 ON sp2.player_id = sp1.player_id").
+		Join("sessions s ON s.id = sp2.session_id").
+		Where(sq.Eq{"sp1.session_id": sessionId}).
+		Where(sq.Eq{"sp2.status": dtos.PlayerActive}).
+		Where(sq.Eq{"s.status": dtos.Completed}).
+		GroupBy("sp2.player_id").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build count players stats: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query count players stats: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id string
+		var stat int
+		if err := rows.Scan(&id, &stat); err != nil {
+			return nil, fmt.Errorf("scan count players stats: %w", err)
+		}
+		out[id] = stat
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate count players stats: %w", err)
 	}
 	return out, nil
 }

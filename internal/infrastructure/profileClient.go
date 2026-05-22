@@ -1,6 +1,7 @@
 package infrastructure
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,17 +16,20 @@ import (
 const (
 	profileBatchCap     = 100
 	profileHTTPTimeout  = 3 * time.Second
+	internalTokenHeader = "X-Internal-Token"
 )
 
 type HTTPProfileClient struct {
 	baseURL string
 	client  *http.Client
+	internalToken string
 }
 
-func NewHTTPProfileClient(baseURL string) *HTTPProfileClient {
+func NewHTTPProfileClient(baseURL, token string) *HTTPProfileClient {
 	return &HTTPProfileClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
 		client:  &http.Client{Timeout: profileHTTPTimeout},
+		internalToken: token,
 	}
 }
 
@@ -86,4 +90,36 @@ func (c *HTTPProfileClient) GetBriefs(ctx context.Context, ids []string) (map[st
 		out[b.ID] = b
 	}
 	return out, nil
+}
+
+func (c *HTTPProfileClient) UpdateStats(ctx context.Context, stat map[string]int, statName dtos.UserStatName) error {
+	endpoint := c.baseURL + "/internal/stats"
+
+	type request struct {
+		Stats map[string]int `json:"stats"`
+		StatName string `json:"statName"`
+	}
+	content := &request{Stats: stat, StatName: string(statName)}
+	jsonData, err := json.Marshal(content)
+	if err != nil {
+        return fmt.Errorf("encode stats body: %w", err)
+    }
+	
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, endpoint, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("stats request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(internalTokenHeader, c.internalToken)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("call profile service: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("profile service returned %d", resp.StatusCode)
+	}
+	return nil
 }

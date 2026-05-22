@@ -11,6 +11,10 @@ type ProfileClient interface {
 	GetBriefs(ctx context.Context, ids []string) (map[string]dtos.UserBrief, error)
 }
 
+type ProfileBroker interface {
+	UpdateStats(ctx context.Context, stat map[string]int, statName dtos.UserStatName) error
+}
+
 type GameSystemsRepository interface {
 	GetCurated(ctx context.Context) ([]dtos.GameSystem, error)
 	Search(ctx context.Context, q string) ([]dtos.GameSystem, error)
@@ -53,9 +57,11 @@ type SessionRepository interface {
 	UpdateComment(ctx context.Context, commentID, text string) (*dtos.SessionCommentary, error)
 	DeleteComment(ctx context.Context, commentID string) error
 
-	// card-data aggregates for GM catalog display
+	// internal
 	GetSystemStats(ctx context.Context, masterIDs []string) (map[string][]dtos.SystemStat, error)
 	GetNextSessions(ctx context.Context, masterIDs []string) (map[string]*dtos.NextSession, error)
+	CountMasterStat(ctx context.Context, masterId string) (int, error)
+	CountPlayersStats(ctx context.Context, sessionId string) (map[string]int, error)
 }
 
 type CampaignRepository interface {

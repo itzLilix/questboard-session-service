@@ -60,10 +60,10 @@ func main() {
 	gameSystemsRepo := infrastructure.NewGameSystemsRepository(conn, psql)
 	sessionRepo := infrastructure.NewSessionRepository(conn, psql)
 	campaignRepo := infrastructure.NewCampaignRepository(conn, psql)
-	profileClient := infrastructure.NewHTTPProfileClient(cfg.ProfileServiceURL)
+	profileClient := infrastructure.NewHTTPProfileClient(cfg.ProfileServiceURL, cfg.InternalToken)
 
 	gameSystemsUsecase := usecase.NewGameSystemsUsecase(gameSystemsRepo)
-	sessionUsecase := usecase.NewSessionUsecase(sessionRepo, profileClient)
+	sessionUsecase := usecase.NewSessionUsecase(sessionRepo, profileClient, profileClient)
 	campaignUsecase := usecase.NewCampaignUsecase(campaignRepo)
 	characterUsecase := usecase.NewCharacterUsecase()
 

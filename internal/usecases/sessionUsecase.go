@@ -44,10 +44,11 @@ type SessionUsecase interface {
 type sessionUsecase struct {
 	repo    SessionRepository
 	profile ProfileClient
+	prBroker ProfileBroker
 }
 
-func NewSessionUsecase(repo SessionRepository, profile ProfileClient) SessionUsecase {
-	return &sessionUsecase{repo: repo, profile: profile}
+func NewSessionUsecase(repo SessionRepository, profile ProfileClient, profileBroker ProfileBroker) SessionUsecase {
+	return &sessionUsecase{repo: repo, profile: profile, prBroker: profileBroker}
 }
 
 func (uc *sessionUsecase) enrich(ctx context.Context, ids []string) map[string]dtos.UserBrief {
@@ -336,10 +337,24 @@ func (uc *sessionUsecase) ChangeStatus(ctx context.Context, id string, v *entiti
 			return nil, ErrInvalidStatus
 	}
 
-	// offline sessions must have an address
 	if status == dtos.Published && existing.Format == dtos.Offline {
 		if existing.Location == nil || existing.Location.Address == "" {
 			return nil, fmt.Errorf("%w: offline sessions require an address before publish", ErrInvalidData)
+		}
+	}
+
+	if status == dtos.Cancelled || status == dtos.Published{
+		stats := make(map[string]int, 1)
+		stat, err := uc.repo.CountMasterStat(ctx, existing.MasterID)
+		stats[existing.MasterID] = stat
+		if err == nil {
+			_ = uc.prBroker.UpdateStats(ctx, stats, dtos.HostedStatName)
+		}
+	}
+	if status == dtos.Completed {
+		stats, err := uc.repo.CountPlayersStats(ctx, id)
+		if err == nil {
+			_ = uc.prBroker.UpdateStats(ctx, stats, dtos.PlayedStatName)
 		}
 	}
 
