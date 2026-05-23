@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/itzLilix/questboard-session-service/internal/entities"
 	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
 	"github.com/itzLilix/questboard-shared/dtos"
 )
@@ -48,7 +49,7 @@ func validateSession(in *SessionInput) error {
 	return nil
 }
 
-func validateListSessions(in *ListSessionsInput) (infrastructure.ListSessionsParams, error) {
+func validateListSessions(in *ListSessionsInput, v *entities.Viewer) (infrastructure.ListSessionsParams, error) {
 	// --- scope ---------------------------------------------------------------
 	scope := in.Scope
 	if scope == "" {
@@ -65,23 +66,23 @@ func validateListSessions(in *ListSessionsInput) (infrastructure.ListSessionsPar
 	case dtos.ScopeMastering:
 		if in.MasterID != "" {
 			masterID = in.MasterID
-			targetIsViewer = in.Viewer.Is(masterID)
+			targetIsViewer = v.Is(masterID)
 		} else {
-			if !in.Viewer.IsAuthenticated() {
+			if !v.IsAuthenticated() {
 				return infrastructure.ListSessionsParams{}, ErrForbidden
 			}
-			masterID = in.Viewer.UserID
+			masterID = v.UserID
 			targetIsViewer = true
 		}
 	case dtos.ScopePlaying:
 		if in.PlayerID != "" {
 			playerID = in.PlayerID
-			targetIsViewer = in.Viewer.Is(playerID)
+			targetIsViewer = v.Is(playerID)
 		} else {
-			if !in.Viewer.IsAuthenticated() {
+			if !v.IsAuthenticated() {
 				return infrastructure.ListSessionsParams{}, ErrForbidden
 			}
-			playerID = in.Viewer.UserID
+			playerID = v.UserID
 			targetIsViewer = true
 		}
 	}
@@ -91,10 +92,32 @@ func validateListSessions(in *ListSessionsInput) (infrastructure.ListSessionsPar
 	if in.Format != "" && format != dtos.Online && format != dtos.Offline {
 		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: invalid format %q", ErrInvalidData, in.Format)
 	}
+
 	stype := dtos.SessionType(in.Type)
 	if in.Type != "" && stype != dtos.OneshotType && stype != dtos.CampaignType {
 		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: invalid type %q", ErrInvalidData, in.Type)
 	}
+	
+	systems := make(map[string]dtos.MultiSelectState, len(in.GSExcluded)+len(in.GSIncluded))
+	sysIncluded := make([]string, 0, len(in.GSIncluded))
+	sysExcluded := make([]string, 0, len(in.GSExcluded))
+	for _, id := range in.GSIncluded {
+		if systems[id] == "" {
+			systems[id] = dtos.IncludedState
+		}
+	}
+	for _, id := range in.GSExcluded {
+		if systems[id] == "" {
+			systems[id] = dtos.ExcludedState
+		}
+	}
+	for k,v := range systems {
+		switch v {
+		case dtos.IncludedState: sysIncluded = append(sysIncluded, k)
+		case dtos.ExcludedState: sysExcluded = append(sysExcluded, k)
+		}
+	}
+
 
 	// --- sort key ------------------------------------------------------------
 	var sort dtos.SessionListSort
@@ -123,7 +146,6 @@ func validateListSessions(in *ListSessionsInput) (infrastructure.ListSessionsPar
 	default:
 		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: invalid order %q", ErrInvalidData, in.SortOrder)
 	}
-	fmt.Printf("resolved sort: %s %s\n", sort, order)
 
 	// --- price and date range check ------------------------------------------
 	if in.PriceMin != nil && *in.PriceMin < 0 {
@@ -151,7 +173,6 @@ func validateListSessions(in *ListSessionsInput) (infrastructure.ListSessionsPar
 	statuses := resolveStatusFilter(in.Status, scope, targetIsViewer)
 
 	return infrastructure.ListSessionsParams{
-		Viewer:         in.Viewer,
 		Scope:          scope,
 		MasterID:       masterID,
 		PlayerID:       playerID,
@@ -161,8 +182,9 @@ func validateListSessions(in *ListSessionsInput) (infrastructure.ListSessionsPar
 		Format:         format,
 		Type:           stype,
 		City:           in.City,
-		SystemID:       in.SystemID,
-		HasFreeSeats:   in.HasFreeSeats,
+		SystemsIn:		sysIncluded,
+		SystemsEx:      sysExcluded,
+		FreeSeats:      in.FreeSeats,
 		PriceMin:       in.PriceMin,
 		PriceMax:       in.PriceMax,
 		DateFrom:       in.DateFrom,

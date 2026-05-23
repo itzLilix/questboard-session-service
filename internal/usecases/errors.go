@@ -11,6 +11,7 @@ import (
 var (
 	ErrInternal            = errors.New("internal error")
 	ErrInvalidData         = errors.New("invalid request data")
+	ErrInvalidCursor         = errors.New("invalid request cursor")
 	ErrSystemAlreadyExists = errors.New("game system already exists")
 
 	ErrNotFound        = errors.New("not found")
@@ -18,7 +19,9 @@ var (
 	ErrConflict        = errors.New("conflict")
 	ErrSeatUnavailable = errors.New("no free seats")
 	ErrInvalidStatus   = errors.New("invalid status")
-	ErrInvalidURL      = errors.New("invalid or disallowed url")
+
+	ErrFileTooLarge = errors.New("file too large")
+	ErrInvalidFileType = errors.New("invalid file type")
 )
 
 func mapRepoErr(op string, err error) error {
@@ -32,7 +35,7 @@ func mapRepoErr(op string, err error) error {
 		return ErrNotFound
 	}
 	if errors.Is(err, cursor.ErrInvalidCursor) {
-		return fmt.Errorf("%s: %w: invalid cursor", op, ErrInvalidData)
+		return fmt.Errorf("%s: %w: invalid cursor", op, ErrInvalidCursor)
 	}
 	return errors.Join(fmt.Errorf("%s: %w", op, err), ErrInternal)
 }

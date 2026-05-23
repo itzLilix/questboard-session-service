@@ -20,8 +20,6 @@ type sessionRepository struct {
 }
 
 type ListSessionsParams struct {
-	Viewer *entities.Viewer
-
 	Scope          dtos.SessionScope
 	MasterID       string
 	PlayerID       string
@@ -32,8 +30,9 @@ type ListSessionsParams struct {
 	Format       dtos.SessionFormat
 	Type         dtos.SessionType
 	City         string
-	SystemID     string
-	HasFreeSeats bool
+	SystemsIn     []string
+	SystemsEx     []string
+	FreeSeats	 int
 	PriceMin     *float64
 	PriceMax     *float64
 	DateFrom     *time.Time
@@ -114,7 +113,7 @@ var sortColumns = map[dtos.SessionListSort]string{
 	dtos.SortSessionSystem:      "gs.is_curated, gs.canonical_name",
 }
 
-func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]dtos.Session, string, error) {
+func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams, v *entities.Viewer) ([]dtos.Session, string, error) {
 	q := r.psql.
 		Select(sessionColumns...).
 		From("sessions s").
@@ -144,11 +143,11 @@ func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]d
 				sq.NotEq{"s.availability": dtos.Private},
 			},
 		}
-		if p.Viewer.IsAuthenticated() {
-			visibility = append(visibility, sq.Eq{"s.master_id": p.Viewer.UserID})
+		if v.IsAuthenticated() {
+			visibility = append(visibility, sq.Eq{"s.master_id": v.UserID})
 			visibility = append(visibility, sq.Expr(
 				"EXISTS (SELECT 1 FROM session_players sp WHERE sp.session_id = s.id AND sp.player_id = ? AND sp.status = ?)",
-				p.Viewer.UserID, dtos.PlayerActive,
+				v.UserID, dtos.PlayerActive,
 			))
 		}
 		q = q.Where(visibility)
@@ -168,11 +167,14 @@ func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams) ([]d
 	if p.City != "" {
 		q = q.Where("s.address ILIKE ?", "%"+p.City+"%")
 	}
-	if p.SystemID != "" {
-		q = q.Where(sq.Eq{"s.system_id": p.SystemID})
+	if len(p.SystemsIn) > 0{
+		q = q.Where(sq.Eq{"s.system_id": p.SystemsIn})
 	}
-	if p.HasFreeSeats {
-		q = q.Where(sq.Gt{"s.free_seats": 0})
+	if len(p.SystemsEx) > 0{
+		q = q.Where(sq.NotEq{"s.system_id": p.SystemsEx})
+	}
+	if p.FreeSeats != 0{
+		q = q.Where(sq.GtOrEq{"s.free_seats": p.FreeSeats})
 	}
 	if p.PriceMin != nil {
 		q = q.Where(sq.GtOrEq{"s.price": *p.PriceMin})

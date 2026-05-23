@@ -27,6 +27,36 @@ func NewGameSystemsRepository(db *pgxpool.Pool, psql sq.StatementBuilderType) *g
 	return &gameSystemsRepository{db: db, psql: psql}
 }
 
+func (r *gameSystemsRepository) GetAll(ctx context.Context) ([]dtos.GameSystem, error) {
+	query, args, err := r.psql.
+		Select(gameSystemColumns...).
+		From("game_systems gs").
+		LeftJoin("sessions s ON s.system_id = gs.id").
+		GroupBy("gs.id").
+		OrderBy("COUNT(s.id) DESC", "gs.canonical_name ASC").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build get all query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query all systems: %w", err)
+	}
+	defer rows.Close()
+
+	systems := make([]dtos.GameSystem, 0)
+	for rows.Next() {
+		var gs dtos.GameSystem
+		if err := scanGameSystem(rows, &gs); err != nil {
+			return nil, fmt.Errorf("scan system: %w", err)
+		}
+		systems = append(systems, gs)
+	}
+
+	return systems, nil
+}
+
 func (r *gameSystemsRepository) GetCurated(ctx context.Context) ([]dtos.GameSystem, error) {
 	query, args, err := r.psql.
 		Select(gameSystemColumns...).

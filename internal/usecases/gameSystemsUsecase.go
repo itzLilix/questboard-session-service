@@ -11,6 +11,7 @@ import (
 )
 
 type GameSystemsUsecase interface {
+	GetAll(ctx context.Context) ([]dtos.GameSystem, error)
 	GetCurated(ctx context.Context) ([]dtos.GameSystem, error)
 	Search(ctx context.Context, query string) ([]dtos.GameSystem, error)
 	AddUserSystem(ctx context.Context, input *CreateGameSystemInput) (*dtos.GameSystem, error)
@@ -26,6 +27,14 @@ type CreateGameSystemInput struct {
 
 func NewGameSystemsUsecase(repo GameSystemsRepository) GameSystemsUsecase {
 	return &gameSystemsUsecase{repo: repo}
+}
+
+func (uc *gameSystemsUsecase) GetAll(ctx context.Context) ([]dtos.GameSystem, error) {
+	systems, err := uc.repo.GetAll(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get all systems: %w: %v", ErrInternal, err)
+	}
+	return systems, nil
 }
 
 func (uc *gameSystemsUsecase) GetCurated(ctx context.Context) ([]dtos.GameSystem, error) {

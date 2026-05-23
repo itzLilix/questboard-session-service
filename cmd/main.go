@@ -5,9 +5,11 @@ import (
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
+	swaggo "github.com/gofiber/contrib/v3/swaggo"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/gofiber/fiber/v3/middleware/static"
+	_ "github.com/itzLilix/questboard-session-service/docs"
 	"github.com/itzLilix/questboard-session-service/internal/config"
 	"github.com/itzLilix/questboard-session-service/internal/handlers"
 	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
@@ -19,6 +21,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// @title          Session Zero Session Service
+// @version        1.0
+// @description    Session, game system, campaign and character API for Session Zero
+// @host           localhost:5137
+// @BasePath       /
+// @securityDefinitions.apikey  CookieAuth
+// @in             cookie
+// @name           access_token
 func main() {
 	log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}).
 		With().Timestamp().Logger()
@@ -40,6 +50,9 @@ func main() {
 	app.Use(middleware.Logger(log.Logger))
 
 	app.Get("/uploads/*", static.New(cfg.UploadDir))
+	if cfg.Env != config.ProdEnv {
+   		app.Get("/swagger/*", swaggo.HandlerDefault)
+	}
 
 	conn, err := infrastructure.Connect(cfg.DatabaseURL, int32(cfg.MinPoolSize), int32(cfg.MaxPoolSize))
 	if err != nil {
@@ -67,10 +80,12 @@ func main() {
 	campaignUsecase := usecase.NewCampaignUsecase(campaignRepo)
 	characterUsecase := usecase.NewCharacterUsecase()
 
-	handlers.NewGameSystemsHandler(gameSystemsUsecase, log.Logger, rbacMiddleware).RegisterRoutes(app)
-	handlers.NewSessionHandler(sessionUsecase, rbacMiddleware, log.Logger).RegisterRoutes(app)
-	handlers.NewCampaignHandler(campaignUsecase, rbacMiddleware, log.Logger).RegisterRoutes(app)
-	handlers.NewCharacterHandler(characterUsecase, rbacMiddleware, log.Logger).RegisterRoutes(app)
+	v1 := app.Group("/v1")
+
+	handlers.NewGameSystemsHandler(gameSystemsUsecase, log.Logger, rbacMiddleware).RegisterRoutes(v1)
+	handlers.NewSessionHandler(sessionUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
+	handlers.NewCampaignHandler(campaignUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
+	handlers.NewCharacterHandler(characterUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
 
 	log.Fatal().Err(app.Listen(":" + cfg.ServerPort)).Msg("server stopped")
 }

@@ -12,7 +12,7 @@ import (
 )
 
 type SessionUsecase interface {
-	List(ctx context.Context, in ListSessionsInput) (dtos.SessionListResponse, error)
+	List(ctx context.Context, in ListSessionsInput, v *entities.Viewer) (dtos.SessionListResponse, error)
 	GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.SessionResponse, error)
 	Create(ctx context.Context, in SessionInput, v *entities.Viewer) (*dtos.Session, error)
 	Edit(ctx context.Context, id string, v *entities.Viewer, in SessionInput) (*dtos.Session, error)
@@ -30,7 +30,7 @@ type SessionUsecase interface {
 	ResolveApplication(ctx context.Context, applicationID string, v *entities.Viewer, status dtos.SessionApplicationStatus) error
 
 	ListFiles(ctx context.Context, sessionID string, v *entities.Viewer) ([]dtos.SessionFile, error)
-	UploadFile(ctx context.Context, in UploadFileInput) (*dtos.SessionFile, error)
+	UploadFile(ctx context.Context, in UploadFileInput, v *entities.Viewer) (*dtos.SessionFile, error)
 	DeleteFile(ctx context.Context, fileID string, v *entities.Viewer) error
 
 	ListComments(ctx context.Context, sessionID string, v *entities.Viewer) ([]dtos.SessionCommentary, error)
@@ -66,8 +66,6 @@ func (uc *sessionUsecase) enrich(ctx context.Context, ids []string) map[string]d
 // --- input -----------------------------------------------------------
 
 type ListSessionsInput struct {
-	Viewer *entities.Viewer
-
 	Scope    dtos.SessionScope
 	MasterID string
 	PlayerID string
@@ -77,8 +75,9 @@ type ListSessionsInput struct {
 	Format       string
 	Type         string
 	City         string
-	SystemID     string
-	HasFreeSeats bool
+	GSIncluded   []string 
+	GSExcluded   []string 
+	FreeSeats 	 int
 	PriceMin     *float64
 	PriceMax     *float64
 	DateFrom     *time.Time
@@ -107,7 +106,6 @@ type SessionInput struct {
 }
 
 type UploadFileInput struct {
-	Viewer    *entities.Viewer
 	SessionID string
 	Filename  string
 	MimeType  string
@@ -118,8 +116,8 @@ type UploadFileInput struct {
 // --- sessions -----------------------------------------------------------
 var DEFAULT_AVAILABILITY = dtos.Open 
 
-func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput) (dtos.SessionListResponse, error) {
-	params, err := validateListSessions(&in)
+func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput, v *entities.Viewer) (dtos.SessionListResponse, error) {
+	params, err := validateListSessions(&in, v)
 	if err != nil {
 		return dtos.SessionListResponse{}, err
 	}
@@ -127,7 +125,7 @@ func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput) (dtos.
 		return dtos.SessionListResponse{Items: []dtos.Session{}, Users: map[string]dtos.UserBrief{}}, nil
 	}
 
-	items, nextCursor, err := uc.repo.List(ctx, params)
+	items, nextCursor, err := uc.repo.List(ctx, params, v)
 	if err != nil {
 		return dtos.SessionListResponse{}, mapRepoErr("list sessions", err)
 	}
@@ -343,7 +341,11 @@ func (uc *sessionUsecase) ChangeStatus(ctx context.Context, id string, v *entiti
 		}
 	}
 
-	if status == dtos.Cancelled || status == dtos.Published{
+	if err := uc.repo.UpdateStatus(ctx, id, status); err != nil {
+		return nil, mapRepoErr("update session status", err)
+	}
+
+	if status == dtos.Cancelled || status == dtos.Published {
 		stats := make(map[string]int, 1)
 		stat, err := uc.repo.CountMasterStat(ctx, existing.MasterID)
 		stats[existing.MasterID] = stat
@@ -356,10 +358,6 @@ func (uc *sessionUsecase) ChangeStatus(ctx context.Context, id string, v *entiti
 		if err == nil {
 			_ = uc.prBroker.UpdateStats(ctx, stats, dtos.PlayedStatName)
 		}
-	}
-
-	if err := uc.repo.UpdateStatus(ctx, id, status); err != nil {
-		return nil, mapRepoErr("update session status", err)
 	}
 	return uc.repo.GetByID(ctx, id)
 }
@@ -459,7 +457,7 @@ func (uc *sessionUsecase) ListFiles(ctx context.Context, sessionID string, v *en
 	return nil, ErrNotFound
 }
 
-func (uc *sessionUsecase) UploadFile(ctx context.Context, in UploadFileInput) (*dtos.SessionFile, error) {
+func (uc *sessionUsecase) UploadFile(ctx context.Context, in UploadFileInput, v *entities.Viewer) (*dtos.SessionFile, error) {
 	return nil, ErrNotFound
 }
 

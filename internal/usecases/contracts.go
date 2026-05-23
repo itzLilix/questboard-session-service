@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 
+	"github.com/itzLilix/questboard-session-service/internal/entities"
 	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
 	"github.com/itzLilix/questboard-shared/dtos"
 )
@@ -16,6 +17,7 @@ type ProfileBroker interface {
 }
 
 type GameSystemsRepository interface {
+	GetAll(ctx context.Context) ([]dtos.GameSystem, error)
 	GetCurated(ctx context.Context) ([]dtos.GameSystem, error)
 	Search(ctx context.Context, q string) ([]dtos.GameSystem, error)
 	AddGameSystem(ctx context.Context, params *infrastructure.CreateGameSystemParams) (*dtos.GameSystem, error)
@@ -23,7 +25,7 @@ type GameSystemsRepository interface {
 
 type SessionRepository interface {
 	// sessions
-	List(ctx context.Context, p infrastructure.ListSessionsParams) ([]dtos.Session, string, error)
+	List(ctx context.Context, p infrastructure.ListSessionsParams, v *entities.Viewer) ([]dtos.Session, string, error)
 	GetByID(ctx context.Context, id string) (*dtos.Session, error)
 	Create(ctx context.Context, p *infrastructure.CreateSessionParams) (*dtos.Session, error)
 	Update(ctx context.Context, id string, p *infrastructure.UpdateSessionParams) (*dtos.Session, error)

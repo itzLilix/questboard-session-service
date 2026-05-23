@@ -1,0 +1,2020 @@
+basePath: /
+definitions:
+  dtos.Campaign:
+    properties:
+      createdAt:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      masterId:
+        type: string
+      status:
+        $ref: '#/definitions/dtos.CampaignStatus'
+      system:
+        $ref: '#/definitions/dtos.GameSystem'
+      title:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  dtos.CampaignSessionTie:
+    properties:
+      briefDescription:
+        type: string
+      cachedScheduledAt:
+        type: string
+      cachedTitle:
+        type: string
+      campaignId:
+        type: string
+      orderIndex:
+        type: integer
+      sessionId:
+        type: string
+    type: object
+  dtos.CampaignStatus:
+    enum:
+    - active
+    - completed
+    - cancelled
+    - paused
+    type: string
+    x-enum-varnames:
+    - CampaignActive
+    - CampaignCompleted
+    - CampaignCancelled
+    - CampaignPaused
+  dtos.Character:
+    properties:
+      avatarUrl:
+        type: string
+      class:
+        type: string
+      createdAt:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      level:
+        type: integer
+      name:
+        type: string
+      playerId:
+        type: string
+      sheetUrl:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  dtos.GameSystem:
+    properties:
+      badgeColor:
+        type: string
+      id:
+        type: string
+      isCurated:
+        type: boolean
+      name:
+        type: string
+      slug:
+        type: string
+    type: object
+  dtos.Location:
+    properties:
+      address:
+        type: string
+      lat:
+        type: number
+      lng:
+        type: number
+    type: object
+  dtos.NextSession:
+    properties:
+      format:
+        $ref: '#/definitions/dtos.SessionFormat'
+      id:
+        type: string
+      scheduledAt:
+        type: string
+      system:
+        $ref: '#/definitions/dtos.GameSystem'
+      type:
+        $ref: '#/definitions/dtos.SessionType'
+    type: object
+  dtos.Session:
+    properties:
+      availability:
+        $ref: '#/definitions/dtos.SessionAvailability'
+      createdAt:
+        type: string
+      description:
+        type: string
+      duration:
+        type: number
+      format:
+        $ref: '#/definitions/dtos.SessionFormat'
+      freeSeats:
+        type: integer
+      id:
+        type: string
+      location:
+        $ref: '#/definitions/dtos.Location'
+      masterId:
+        type: string
+      masterNotes:
+        type: string
+      maxSeats:
+        type: integer
+      previewUrl:
+        type: string
+      price:
+        type: number
+      scheduledAt:
+        type: string
+      status:
+        $ref: '#/definitions/dtos.SessionStatus'
+      system:
+        $ref: '#/definitions/dtos.GameSystem'
+      title:
+        type: string
+      type:
+        $ref: '#/definitions/dtos.SessionType'
+      updatedAt:
+        type: string
+    type: object
+  dtos.SessionApplication:
+    properties:
+      applicantId:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      message:
+        type: string
+      resolvedAt:
+        type: string
+      sessionId:
+        type: string
+      status:
+        $ref: '#/definitions/dtos.SessionApplicationStatus'
+    type: object
+  dtos.SessionApplicationStatus:
+    enum:
+    - pending
+    - accepted
+    - rejected
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - ApplicationPending
+    - ApplicationAccepted
+    - ApplicationRejected
+    - ApplicationCancelled
+  dtos.SessionAvailability:
+    enum:
+    - open
+    - application
+    - private
+    type: string
+    x-enum-varnames:
+    - Open
+    - Application
+    - Private
+  dtos.SessionCardData:
+    properties:
+      nextSession:
+        $ref: '#/definitions/dtos.NextSession'
+      systemStats:
+        items:
+          $ref: '#/definitions/dtos.SystemStat'
+        type: array
+      userId:
+        type: string
+    type: object
+  dtos.SessionCommentary:
+    properties:
+      authorId:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      sessionId:
+        type: string
+      text:
+        type: string
+      updatedAt:
+        type: string
+    type: object
+  dtos.SessionFile:
+    properties:
+      filename:
+        type: string
+      id:
+        type: string
+      mimeType:
+        type: string
+      sessionId:
+        type: string
+      sizeBytes:
+        type: integer
+      uploadedAt:
+        type: string
+      uploaderId:
+        type: string
+      url:
+        type: string
+    type: object
+  dtos.SessionFormat:
+    enum:
+    - online
+    - offline
+    type: string
+    x-enum-varnames:
+    - Online
+    - Offline
+  dtos.SessionListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dtos.Session'
+        type: array
+      nextCursor:
+        type: string
+      users:
+        additionalProperties:
+          $ref: '#/definitions/dtos.UserBrief'
+        type: object
+    type: object
+  dtos.SessionPlayer:
+    properties:
+      character:
+        $ref: '#/definitions/dtos.Character'
+      joinedAt:
+        type: string
+      playerId:
+        type: string
+      sessionId:
+        type: string
+      status:
+        $ref: '#/definitions/dtos.SessionPlayerStatus'
+    type: object
+  dtos.SessionPlayerStatus:
+    enum:
+    - active
+    - kicked
+    - left
+    type: string
+    x-enum-varnames:
+    - PlayerActive
+    - PlayerKicked
+    - PlayerLeft
+  dtos.SessionPlayersResponse:
+    properties:
+      players:
+        items:
+          $ref: '#/definitions/dtos.SessionPlayer'
+        type: array
+      users:
+        additionalProperties:
+          $ref: '#/definitions/dtos.UserBrief'
+        type: object
+    type: object
+  dtos.SessionResponse:
+    properties:
+      players:
+        items:
+          $ref: '#/definitions/dtos.SessionPlayer'
+        type: array
+      session:
+        $ref: '#/definitions/dtos.Session'
+      users:
+        additionalProperties:
+          $ref: '#/definitions/dtos.UserBrief'
+        type: object
+    type: object
+  dtos.SessionStatus:
+    enum:
+    - draft
+    - published
+    - ongoing
+    - completed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - Draft
+    - Published
+    - Ongoing
+    - Completed
+    - Cancelled
+  dtos.SessionType:
+    enum:
+    - oneshot
+    - campaign
+    type: string
+    x-enum-varnames:
+    - OneshotType
+    - CampaignType
+  dtos.SystemStat:
+    properties:
+      badgeColor:
+        type: string
+      id:
+        type: string
+      isCurated:
+        type: boolean
+      name:
+        type: string
+      sessionsCount:
+        type: integer
+      slug:
+        type: string
+    type: object
+  dtos.UserBrief:
+    properties:
+      avatarUrl:
+        type: string
+      displayName:
+        type: string
+      id:
+        type: string
+      username:
+        type: string
+    type: object
+  internal_handlers.ChangeCampaignStatusRequest:
+    properties:
+      status:
+        type: string
+    type: object
+  internal_handlers.ChangeStatusRequest:
+    properties:
+      status:
+        $ref: '#/definitions/dtos.SessionStatus'
+    type: object
+  internal_handlers.CreateCampaignRequest:
+    properties:
+      description:
+        type: string
+      systemId:
+        type: string
+      title:
+        type: string
+    type: object
+  internal_handlers.CreateCharacterRequest:
+    properties:
+      avatarUrl:
+        type: string
+      class:
+        type: string
+      description:
+        type: string
+      level:
+        type: integer
+      name:
+        type: string
+      sheetUrl:
+        type: string
+    type: object
+  internal_handlers.CreateGameSystemRequest:
+    properties:
+      name:
+        type: string
+    type: object
+  internal_handlers.CreateSessionRequest:
+    properties:
+      availability:
+        $ref: '#/definitions/dtos.SessionAvailability'
+      description:
+        type: string
+      durationHours:
+        type: number
+      format:
+        $ref: '#/definitions/dtos.SessionFormat'
+      location:
+        $ref: '#/definitions/dtos.Location'
+      masterNotes:
+        type: string
+      maxSeats:
+        type: integer
+      price:
+        type: number
+      scheduledAt:
+        type: string
+      systemId:
+        type: string
+      title:
+        type: string
+    type: object
+  internal_handlers.EditCampaignRequest:
+    properties:
+      description:
+        type: string
+      systemId:
+        type: string
+      title:
+        type: string
+    type: object
+  internal_handlers.EditCharacterRequest:
+    properties:
+      avatarUrl:
+        type: string
+      class:
+        type: string
+      description:
+        type: string
+      level:
+        type: integer
+      name:
+        type: string
+      sheetUrl:
+        type: string
+    type: object
+  internal_handlers.EditSessionRequest:
+    properties:
+      availability:
+        $ref: '#/definitions/dtos.SessionAvailability'
+      description:
+        type: string
+      durationHours:
+        type: number
+      format:
+        $ref: '#/definitions/dtos.SessionFormat'
+      location:
+        $ref: '#/definitions/dtos.Location'
+      masterNotes:
+        type: string
+      maxSeats:
+        type: integer
+      previewUrl:
+        type: string
+      price:
+        type: number
+      scheduledAt:
+        type: string
+      systemId:
+        type: string
+      title:
+        type: string
+    type: object
+  internal_handlers.EditTieRequest:
+    properties:
+      briefDescription:
+        type: string
+      orderIndex:
+        type: integer
+    type: object
+  internal_handlers.ErrorResponse:
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+    type: object
+  internal_handlers.TieSessionRequest:
+    properties:
+      briefDescription:
+        type: string
+      orderIndex:
+        type: integer
+      sessionId:
+        type: string
+    type: object
+host: localhost:5137
+info:
+  contact: {}
+  description: Session, game system, campaign and character API for Session Zero
+  title: Session Zero Session Service
+  version: "1.0"
+paths:
+  /v1/campaigns:
+    get:
+      parameters:
+      - description: Search query
+        in: query
+        name: search
+        type: string
+      - description: Filter by master user ID
+        in: query
+        name: masterId
+        type: string
+      - description: Filter by game system ID
+        in: query
+        name: systemId
+        type: string
+      - description: Status filter
+        enum:
+        - active
+        - completed
+        - cancelled
+        - paused
+        in: query
+        name: status
+        type: string
+      - description: Sort field
+        in: query
+        name: sort
+        type: string
+      - description: Sort order
+        enum:
+        - ASC
+        - DESC
+        in: query
+        name: order
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: string
+      - description: Page size
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            properties:
+              items:
+                items:
+                  $ref: '#/definitions/dtos.Campaign'
+                type: array
+              nextCursor:
+                type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: List campaigns
+      tags:
+      - campaigns
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Campaign data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.CreateCampaignRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dtos.Campaign'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Create a campaign
+      tags:
+      - campaigns
+  /v1/campaigns/{id}:
+    delete:
+      parameters:
+      - description: Campaign ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Delete a campaign
+      tags:
+      - campaigns
+    get:
+      parameters:
+      - description: Campaign ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.Campaign'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Get campaign by ID
+      tags:
+      - campaigns
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Campaign ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.EditCampaignRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.Campaign'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Edit a campaign
+      tags:
+      - campaigns
+  /v1/campaigns/{id}/players:
+    get:
+      parameters:
+      - description: Campaign ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.SessionPlayer'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: List players in a campaign
+      tags:
+      - campaigns
+  /v1/campaigns/{id}/sessions:
+    get:
+      parameters:
+      - description: Campaign ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.CampaignSessionTie'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: List sessions tied to a campaign
+      tags:
+      - campaigns
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Campaign ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Session tie data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.TieSessionRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Tie a session to a campaign
+      tags:
+      - campaigns
+  /v1/campaigns/{id}/sessions/{sessionId}:
+    delete:
+      parameters:
+      - description: Campaign ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Remove a session from a campaign
+      tags:
+      - campaigns
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Campaign ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      - description: Tie metadata
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.EditTieRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Update campaign-session tie metadata
+      tags:
+      - campaigns
+  /v1/campaigns/{id}/status:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Campaign ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: New status
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.ChangeCampaignStatusRequest'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Change campaign status
+      tags:
+      - campaigns
+  /v1/characters:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Character data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.CreateCharacterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dtos.Character'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Create a character
+      tags:
+      - characters
+  /v1/characters/{id}:
+    delete:
+      parameters:
+      - description: Character ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Delete a character
+      tags:
+      - characters
+    get:
+      parameters:
+      - description: Character ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.Character'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Get character by ID
+      tags:
+      - characters
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Character ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.EditCharacterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.Character'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Edit a character
+      tags:
+      - characters
+  /v1/characters/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.Character'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List my characters
+      tags:
+      - characters
+  /v1/game-systems:
+    get:
+      parameters:
+      - description: Search query
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.GameSystem'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Search game systems
+      tags:
+      - game-systems
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Game system name
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.CreateGameSystemRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.GameSystem'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Add a custom game system
+      tags:
+      - game-systems
+  /v1/game-systems/all:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.GameSystem'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Get all game systems
+      tags:
+      - game-systems
+  /v1/game-systems/curated:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.GameSystem'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Get curated game systems
+      tags:
+      - game-systems
+  /v1/sessions:
+    get:
+      parameters:
+      - description: Scope
+        enum:
+        - catalog
+        - mastering
+        - playing
+        in: query
+        name: scope
+        type: string
+      - description: Filter by master user ID
+        in: query
+        name: masterId
+        type: string
+      - description: Filter by player user ID
+        in: query
+        name: playerId
+        type: string
+      - collectionFormat: csv
+        description: Status filter; use 'public' for published/ongoing/completed
+        in: query
+        items:
+          type: string
+        name: status
+        type: array
+      - description: Full-text search
+        in: query
+        name: search
+        type: string
+      - description: Format
+        enum:
+        - online
+        - offline
+        in: query
+        name: format
+        type: string
+      - description: Type
+        enum:
+        - oneshot
+        - campaign
+        in: query
+        name: type
+        type: string
+      - description: City (offline sessions only)
+        in: query
+        name: city
+        type: string
+      - collectionFormat: csv
+        description: Exclude game system by ID
+        in: query
+        items:
+          type: string
+        name: systemExcluded
+        type: array
+      - collectionFormat: csv
+        description: Include only game system by ID
+        in: query
+        items:
+          type: string
+        name: systemIncluded
+        type: array
+      - description: Minimum available seats
+        in: query
+        name: freeSeats
+        type: integer
+      - description: Minimum price
+        in: query
+        name: priceMin
+        type: number
+      - description: Maximum price
+        in: query
+        name: priceMax
+        type: number
+      - description: Start date filter (RFC3339)
+        in: query
+        name: dateFrom
+        type: string
+      - description: End date filter (RFC3339)
+        in: query
+        name: dateTo
+        type: string
+      - description: Sort field
+        enum:
+        - scheduled_at
+        - created_at
+        - price
+        - title
+        - system
+        in: query
+        name: sort
+        type: string
+      - description: Sort order
+        enum:
+        - ASC
+        - DESC
+        in: query
+        name: order
+        type: string
+      - description: Pagination cursor
+        in: query
+        name: cursor
+        type: string
+      - description: Page size (default 20)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.SessionListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: List sessions
+      tags:
+      - sessions
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.CreateSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dtos.Session'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Create a session
+      tags:
+      - sessions
+  /v1/sessions/{id}:
+    delete:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Delete a session
+      tags:
+      - sessions
+    get:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.SessionResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Get session by ID
+      tags:
+      - sessions
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.EditSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.Session'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Edit a session
+      tags:
+      - sessions
+  /v1/sessions/{id}/applications:
+    get:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.SessionApplication'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List applications for a session
+      tags:
+      - sessions
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dtos.SessionApplication'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Apply to join a session
+      tags:
+      - sessions
+  /v1/sessions/{id}/applications/{applicationId}:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Application ID
+        in: path
+        name: applicationId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Accept or reject an application
+      tags:
+      - sessions
+  /v1/sessions/{id}/comments:
+    get:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.SessionCommentary'
+            type: array
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: List session comments
+      tags:
+      - sessions
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dtos.SessionCommentary'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Add a comment to a session
+      tags:
+      - sessions
+  /v1/sessions/{id}/comments/{commentId}:
+    delete:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Comment ID
+        in: path
+        name: commentId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Delete a comment
+      tags:
+      - sessions
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Comment ID
+        in: path
+        name: commentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.SessionCommentary'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Edit a comment
+      tags:
+      - sessions
+  /v1/sessions/{id}/files:
+    get:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.SessionFile'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List session files
+      tags:
+      - sessions
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dtos.SessionFile'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "413":
+          description: Request Entity Too Large
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Upload a file to a session
+      tags:
+      - sessions
+  /v1/sessions/{id}/files/{fileId}:
+    delete:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: File ID
+        in: path
+        name: fileId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Delete a session file
+      tags:
+      - sessions
+  /v1/sessions/{id}/join:
+    post:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Join a session
+      tags:
+      - sessions
+  /v1/sessions/{id}/leave:
+    delete:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Leave a session
+      tags:
+      - sessions
+  /v1/sessions/{id}/players:
+    get:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.SessionPlayersResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: List session players
+      tags:
+      - sessions
+  /v1/sessions/{id}/players/{playerId}:
+    delete:
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Player user ID
+        in: path
+        name: playerId
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Kick a player from a session
+      tags:
+      - sessions
+  /v1/sessions/{id}/players/me:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Set character for the current player slot
+      tags:
+      - sessions
+  /v1/sessions/{id}/status:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Session ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: New status
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.ChangeStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.Session'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Change session status
+      tags:
+      - sessions
+  /v1/sessions/cards:
+    get:
+      parameters:
+      - collectionFormat: csv
+        description: Master user IDs
+        in: query
+        items:
+          type: string
+        name: masterId
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.SessionCardData'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      summary: Get session card data for master profiles
+      tags:
+      - sessions
+securityDefinitions:
+  CookieAuth:
+    in: cookie
+    name: access_token
+    type: apiKey
+swagger: "2.0"
