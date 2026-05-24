@@ -3,6 +3,7 @@ package usecase
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/itzLilix/questboard-session-service/internal/entities"
 	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
@@ -10,11 +11,12 @@ import (
 )
 
 func validateSession(in *SessionInput) error {
-	if in.MaxSeats != nil && *in.MaxSeats <= 0 {
-		return fmt.Errorf("%w: missing required field", ErrInvalidData)
-	}
-	if in.Title != nil && len(*in.Title) > 100 {
-		return fmt.Errorf("%w: title must be <= 100 characters", ErrInvalidData)
+	if in.Title != nil {
+		trimmed := strings.TrimSpace(*in.Title)
+		in.Title = &trimmed
+		if len(*in.Title) == 0 || len(*in.Title) > 100 {
+			return fmt.Errorf("%w: title must be 1-100 characters", ErrInvalidData)
+		}
 	}
 	if in.Description != nil && len(*in.Description) > 2000 {
 		return fmt.Errorf("%w: description must be <= 2000 characters", ErrInvalidData)
@@ -30,8 +32,13 @@ func validateSession(in *SessionInput) error {
 	if in.Price != nil && *in.Price < 0 {
 		return fmt.Errorf("%w: price must be >= 0", ErrInvalidData)
 	}
-	if in.DurationHours != nil && *in.DurationHours <= 0 {
-		return fmt.Errorf("%w: durationHours must be > 0", ErrInvalidData)
+	if in.DurationHours != nil { 
+		if *in.DurationHours <= 0 {
+			return fmt.Errorf("%w: durationHours must be > 0", ErrInvalidData)
+		}
+		if *in.DurationHours > 24 {
+			return fmt.Errorf("%w: durationHours must be <= 24", ErrInvalidData)
+		}
 	}
 	if in.ScheduledAt != nil && in.ScheduledAt.IsZero() {
 		return fmt.Errorf("%w: scheduledAt must be a valid date", ErrInvalidData)
@@ -45,6 +52,21 @@ func validateSession(in *SessionInput) error {
 		if *in.Availability != dtos.Open && *in.Availability != dtos.Application && *in.Availability != dtos.Private {
 			return fmt.Errorf("%w: invalid availability", ErrInvalidData)
 		}
+	}
+	if in.MasterNotes != nil && len(*in.MasterNotes) > 2000 {
+		return fmt.Errorf("%w: notes must be <= 2000 characters", ErrInvalidData)
+	}
+	if in.Address != nil && len(*in.Address) > 400 {
+		return fmt.Errorf("%w: address must be <= 400 characters", ErrInvalidData)
+	}
+	if in.Lng != nil && (*in.Lng < -180 || *in.Lng > 180) {
+		return fmt.Errorf("%w: longitude must be <= +-180", ErrInvalidData)
+	}
+	if in.Lat != nil && (*in.Lng < -90 || *in.Lng > 90) {
+		return fmt.Errorf("%w: latitude must be <= +-90", ErrInvalidData)
+	}
+	if in.ScheduledAt != nil && in.ScheduledAt.After(time.Now().AddDate(10, 0, 0)) {
+    	return fmt.Errorf("%w: scheduledAt too far in the future", ErrInvalidData)
 	}
 	return nil
 }
@@ -96,6 +118,10 @@ func validateListSessions(in *ListSessionsInput, v *entities.Viewer) (infrastruc
 	stype := dtos.SessionType(in.Type)
 	if in.Type != "" && stype != dtos.OneshotType && stype != dtos.CampaignType {
 		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: invalid type %q", ErrInvalidData, in.Type)
+	}
+
+	if len(in.GSExcluded) > 50 || len(in.GSIncluded) > 50 {
+		return  infrastructure.ListSessionsParams{}, fmt.Errorf("%w: too many game system filters", ErrInvalidData)
 	}
 	
 	systems := make(map[string]dtos.MultiSelectState, len(in.GSExcluded)+len(in.GSIncluded))
