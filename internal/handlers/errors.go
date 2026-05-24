@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/gofiber/fiber/v3"
-	usecase "github.com/itzLilix/questboard-session-service/internal/usecases"
+	"github.com/itzLilix/questboard-session-service/internal/usecase"
 )
 
 var (

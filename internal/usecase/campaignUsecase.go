@@ -8,31 +8,15 @@ import (
 	"github.com/itzLilix/questboard-shared/dtos"
 )
 
-type CampaignUsecase interface {
-	List(ctx context.Context, in ListCampaignsInput) (dtos.Page[dtos.Campaign], error)
-	GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.Campaign, error)
-	Create(ctx context.Context, in CreateCampaignInput) (*dtos.Campaign, error)
-	Edit(ctx context.Context, id string, v *entities.Viewer, in EditCampaignInput) (*dtos.Campaign, error)
-	Delete(ctx context.Context, id string, v *entities.Viewer) error
-	ChangeStatus(ctx context.Context, id string, v *entities.Viewer, status dtos.CampaignStatus) error
-
-	ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error)
-	TieSession(ctx context.Context, campaignID string, v *entities.Viewer, in TieSessionInput) error
-	EditTie(ctx context.Context, campaignID, sessionID string, v *entities.Viewer, in EditTieInput) error
-	UntieSession(ctx context.Context, campaignID, sessionID string, v *entities.Viewer) error
-
-	ListPlayers(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.SessionPlayer, error)
-}
-
 type campaignUsecase struct {
 	repo CampaignRepository
 }
 
-func NewCampaignUsecase(repo CampaignRepository) CampaignUsecase {
+func NewCampaignUsecase(repo CampaignRepository) *campaignUsecase {
 	return &campaignUsecase{repo: repo}
 }
 
-// --- input shapes -----------------------------------------------------------
+// --- input types -----------------------------------------------------------
 
 type ListCampaignsInput struct {
 	Viewer    *entities.Viewer

@@ -6,7 +6,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/itzLilix/questboard-session-service/internal/entities"
 	"github.com/itzLilix/questboard-session-service/internal/middleware"
-	usecase "github.com/itzLilix/questboard-session-service/internal/usecases"
+	"github.com/itzLilix/questboard-session-service/internal/usecase"
 	"github.com/itzLilix/questboard-shared/dtos"
 	"github.com/rs/zerolog"
 )
@@ -18,10 +18,10 @@ type SessionHandler interface {
 type sessionHandler struct {
 	rbac middleware.RBACMiddleware
 	log  zerolog.Logger
-	uc usecase.SessionUsecase
+	uc SessionUsecase
 }
 
-func NewSessionHandler(uc usecase.SessionUsecase, rbac middleware.RBACMiddleware, log zerolog.Logger) SessionHandler {
+func NewSessionHandler(uc SessionUsecase, rbac middleware.RBACMiddleware, log zerolog.Logger) SessionHandler {
 	return &sessionHandler{
 		uc:   uc,
 		rbac: rbac,

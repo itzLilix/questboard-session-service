@@ -11,43 +11,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type SessionUsecase interface {
-	List(ctx context.Context, in ListSessionsInput, v *entities.Viewer) (dtos.SessionListResponse, error)
-	GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.SessionResponse, error)
-	Create(ctx context.Context, in SessionInput, v *entities.Viewer) (*dtos.Session, error)
-	Edit(ctx context.Context, id string, v *entities.Viewer, in SessionInput) (*dtos.Session, error)
-	Delete(ctx context.Context, id string, v *entities.Viewer) error
-	ChangeStatus(ctx context.Context, id string, v *entities.Viewer, status dtos.SessionStatus) (*dtos.Session, error)
-
-	ListPlayers(ctx context.Context, sessionID string, v *entities.Viewer) (*dtos.SessionPlayersResponse, error)
-	Join(ctx context.Context, sessionID string, v *entities.Viewer, characterID *string) error
-	Leave(ctx context.Context, sessionID string, v *entities.Viewer) error
-	Kick(ctx context.Context, sessionID string, v *entities.Viewer, playerID string) error
-	SetMyCharacter(ctx context.Context, sessionID string, v *entities.Viewer, characterID *string) error
-
-	Apply(ctx context.Context, sessionID string, v *entities.Viewer, message *string) (*dtos.SessionApplication, error)
-	ListApplications(ctx context.Context, sessionID string, v *entities.Viewer) ([]dtos.SessionApplication, error)
-	ResolveApplication(ctx context.Context, applicationID string, v *entities.Viewer, status dtos.SessionApplicationStatus) error
-
-	ListFiles(ctx context.Context, sessionID string, v *entities.Viewer) ([]dtos.SessionFile, error)
-	UploadFile(ctx context.Context, in UploadFileInput, v *entities.Viewer) (*dtos.SessionFile, error)
-	DeleteFile(ctx context.Context, fileID string, v *entities.Viewer) error
-
-	ListComments(ctx context.Context, sessionID string, v *entities.Viewer) ([]dtos.SessionCommentary, error)
-	AddComment(ctx context.Context, sessionID string, v *entities.Viewer, text string) (*dtos.SessionCommentary, error)
-	EditComment(ctx context.Context, commentID string, v *entities.Viewer, text string) (*dtos.SessionCommentary, error)
-	DeleteComment(ctx context.Context, commentID string, v *entities.Viewer) error
-
-	GetCardData(ctx context.Context, masterIDs []string) ([]dtos.SessionCardData, error)
-}
-
 type sessionUsecase struct {
 	repo    SessionRepository
 	profile ProfileClient
 	prBroker ProfileBroker
 }
 
-func NewSessionUsecase(repo SessionRepository, profile ProfileClient, profileBroker ProfileBroker) SessionUsecase {
+func NewSessionUsecase(repo SessionRepository, profile ProfileClient, profileBroker ProfileBroker) *sessionUsecase {
 	return &sessionUsecase{repo: repo, profile: profile, prBroker: profileBroker}
 }
 

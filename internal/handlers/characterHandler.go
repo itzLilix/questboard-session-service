@@ -3,19 +3,18 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/itzLilix/questboard-session-service/internal/middleware"
-	usecase "github.com/itzLilix/questboard-session-service/internal/usecases"
 	"github.com/rs/zerolog"
 )
 
 type CharacterHandler interface{ RegisterRoutes(app fiber.Router) }
 
 type characterHandler struct {
-	uc   usecase.CharacterUsecase
+	uc   CharacterUsecase
 	rbac middleware.RBACMiddleware
 	log  zerolog.Logger
 }
 
-func NewCharacterHandler(uc usecase.CharacterUsecase, rbac middleware.RBACMiddleware, log zerolog.Logger) CharacterHandler {
+func NewCharacterHandler(uc CharacterUsecase, rbac middleware.RBACMiddleware, log zerolog.Logger) CharacterHandler {
 	return &characterHandler{uc: uc, rbac: rbac, log: log}
 }
 

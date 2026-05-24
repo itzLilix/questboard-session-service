@@ -3,7 +3,7 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/itzLilix/questboard-session-service/internal/middleware"
-	usecase "github.com/itzLilix/questboard-session-service/internal/usecases"
+	"github.com/itzLilix/questboard-session-service/internal/usecase"
 	"github.com/rs/zerolog"
 )
 
@@ -12,12 +12,12 @@ type GameSystemsHandler interface {
 }
 
 type gameSystemsHandler struct {
-	uc  usecase.GameSystemsUsecase
+	uc  GameSystemsUsecase
 	log zerolog.Logger
 	rbac middleware.RBACMiddleware
 }
 
-func NewGameSystemsHandler(uc usecase.GameSystemsUsecase, log zerolog.Logger, rbac middleware.RBACMiddleware) GameSystemsHandler {
+func NewGameSystemsHandler(uc GameSystemsUsecase, log zerolog.Logger, rbac middleware.RBACMiddleware) GameSystemsHandler {
 	return &gameSystemsHandler{uc: uc, log: log, rbac: rbac}
 }
 

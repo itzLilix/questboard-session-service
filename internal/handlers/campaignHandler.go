@@ -3,7 +3,6 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/itzLilix/questboard-session-service/internal/middleware"
-	usecase "github.com/itzLilix/questboard-session-service/internal/usecases"
 	"github.com/rs/zerolog"
 )
 
@@ -14,10 +13,10 @@ type CampaignHandler interface {
 type campaignHandler struct {
 	rbac middleware.RBACMiddleware
 	log  zerolog.Logger
-	uc   usecase.CampaignUsecase
+	uc   CampaignUsecase
 }
 
-func NewCampaignHandler(uc usecase.CampaignUsecase, rbac middleware.RBACMiddleware, log zerolog.Logger) CampaignHandler {
+func NewCampaignHandler(uc CampaignUsecase, rbac middleware.RBACMiddleware, log zerolog.Logger) CampaignHandler {
 	return &campaignHandler{
 		uc:   uc,
 		rbac: rbac,

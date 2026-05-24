@@ -10,13 +10,6 @@ import (
 	"github.com/itzLilix/questboard-shared/dtos"
 )
 
-type GameSystemsUsecase interface {
-	GetAll(ctx context.Context) ([]dtos.GameSystem, error)
-	GetCurated(ctx context.Context) ([]dtos.GameSystem, error)
-	Search(ctx context.Context, query string) ([]dtos.GameSystem, error)
-	AddUserSystem(ctx context.Context, input *CreateGameSystemInput) (*dtos.GameSystem, error)
-}
-
 type gameSystemsUsecase struct {
 	repo GameSystemsRepository
 }
@@ -25,7 +18,7 @@ type CreateGameSystemInput struct {
     Name string
 }
 
-func NewGameSystemsUsecase(repo GameSystemsRepository) GameSystemsUsecase {
+func NewGameSystemsUsecase(repo GameSystemsRepository) *gameSystemsUsecase {
 	return &gameSystemsUsecase{repo: repo}
 }
 

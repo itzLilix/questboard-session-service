@@ -14,7 +14,7 @@ import (
 	"github.com/itzLilix/questboard-session-service/internal/handlers"
 	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
 	"github.com/itzLilix/questboard-session-service/internal/middleware"
-	usecase "github.com/itzLilix/questboard-session-service/internal/usecases"
+	"github.com/itzLilix/questboard-session-service/internal/usecase"
 	"github.com/itzLilix/questboard-shared/jwt"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
