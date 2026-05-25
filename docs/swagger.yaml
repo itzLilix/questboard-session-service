@@ -340,8 +340,14 @@ definitions:
         type: string
       displayName:
         type: string
+      hosted:
+        type: integer
       id:
         type: string
+      played:
+        type: integer
+      rating:
+        type: number
       username:
         type: string
     type: object
@@ -483,7 +489,7 @@ definitions:
       sessionId:
         type: string
     type: object
-host: localhost:5137
+host: localhost:3001
 info:
   contact: {}
   description: Session, game system, campaign and character API for Session Zero

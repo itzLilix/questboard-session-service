@@ -6,7 +6,7 @@
         "contact": {},
         "version": "1.0"
     },
-    "host": "localhost:5137",
+    "host": "localhost:3001",
     "basePath": "/",
     "paths": {
         "/v1/campaigns": {
@@ -2882,8 +2882,17 @@
                 "displayName": {
                     "type": "string"
                 },
+                "hosted": {
+                    "type": "integer"
+                },
                 "id": {
                     "type": "string"
+                },
+                "played": {
+                    "type": "integer"
+                },
+                "rating": {
+                    "type": "number"
                 },
                 "username": {
                     "type": "string"

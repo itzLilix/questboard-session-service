@@ -2888,8 +2888,17 @@ const docTemplate = `{
                 "displayName": {
                     "type": "string"
                 },
+                "hosted": {
+                    "type": "integer"
+                },
                 "id": {
                     "type": "string"
+                },
+                "played": {
+                    "type": "integer"
+                },
+                "rating": {
+                    "type": "number"
                 },
                 "username": {
                     "type": "string"
@@ -3122,7 +3131,7 @@ const docTemplate = `{
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
-	Host:             "localhost:5137",
+	Host:             "localhost:3001",
 	BasePath:         "/",
 	Schemes:          []string{},
 	Title:            "Session Zero Session Service",

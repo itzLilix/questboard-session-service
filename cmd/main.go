@@ -24,7 +24,7 @@ import (
 // @title          Session Zero Session Service
 // @version        1.0
 // @description    Session, game system, campaign and character API for Session Zero
-// @host           localhost:5137
+// @host           localhost:3001
 // @BasePath       /
 // @securityDefinitions.apikey  CookieAuth
 // @in             cookie
