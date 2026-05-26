@@ -23,6 +23,7 @@ type sessionCursor struct {
 	Price       *float64   `json:"p,omitempty"`
 	Title       *string    `json:"t,omitempty"`
 	System      *string    `json:"sy,omitempty"`
+	SystemIsCur *bool  	   `json:"isc,omitempty"`
 	ID          string     `json:"id"`
 }
 
@@ -68,7 +69,14 @@ func applyCursor(q sq.SelectBuilder, c *sessionCursor, sortKey dtos.SessionListS
 			return q, cursor.ErrInvalidCursor
 		}
 		return q.Where(fmt.Sprintf("(%s, s.id) %s (?, ?)", sortCol, op), *c.Title, c.ID), nil
+	case dtos.SortSessionSystem: {
+		if c.System == nil {
+			return q, cursor.ErrInvalidCursor
+		}
+		return q.Where(fmt.Sprintf("(%s, s.id) %s (?, ?, ?)", sortCol, op), *c.SystemIsCur, *c.System, c.ID), nil
 	}
+	}
+	
 	return q.Where(fmt.Sprintf("s.id %s ?", op), c.ID), nil
 }
 
@@ -98,8 +106,10 @@ func buildNextCursor(last dtos.Session, sortKey dtos.SessionListSort, sortOrder 
 		v := last.Title
 		c.Title = &v
 	case dtos.SortSessionSystem:
-		v := last.System.Name
-		c.System = &v
+		v1 := last.System.Name
+		v2 := last.System.IsCurated
+		c.System = &v1
+		c.SystemIsCur = &v2
 	}
 	return cursor.EncodeCursor(c)
 }
