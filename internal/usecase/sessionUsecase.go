@@ -391,8 +391,13 @@ func (uc *sessionUsecase) ListPlayers(ctx context.Context, sessionID string, v *
 	return &dtos.SessionPlayersResponse{Players: players, Users: users}, nil
 }
 
-func (uc *sessionUsecase) Join(ctx context.Context, sessionID string, v *entities.Viewer, characterID *string) error {
+func (uc *sessionUsecase) Join(ctx context.Context, sessionID string, v *entities.Viewer) error {
+	//check if player_session exists
+	//check if not banned/kicked
+	//if leaved just update status
+	//if allowed join transaction
 	return ErrNotFound
+
 }
 
 func (uc *sessionUsecase) Leave(ctx context.Context, sessionID string, v *entities.Viewer) error {

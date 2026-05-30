@@ -48,7 +48,7 @@ type SessionUsecase interface {
 	ChangeStatus(ctx context.Context, id string, v *entities.Viewer, status dtos.SessionStatus) (*dtos.Session, error)
 
 	ListPlayers(ctx context.Context, sessionID string, v *entities.Viewer) (*dtos.SessionPlayersResponse, error)
-	Join(ctx context.Context, sessionID string, v *entities.Viewer, characterID *string) error
+	Join(ctx context.Context, sessionID string, v *entities.Viewer) error
 	Leave(ctx context.Context, sessionID string, v *entities.Viewer) error
 	Kick(ctx context.Context, sessionID string, v *entities.Viewer, playerID string) error
 	SetMyCharacter(ctx context.Context, sessionID string, v *entities.Viewer, characterID *string) error
