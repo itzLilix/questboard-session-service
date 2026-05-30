@@ -9,10 +9,10 @@ import (
 )
 
 type CampaignUsecase interface {
-	List(ctx context.Context, in uc.ListCampaignsInput) (dtos.Page[dtos.Campaign], error)
+	List(ctx context.Context, in uc.ListCampaignsInput, v *entities.Viewer) (dtos.Page[dtos.Campaign], error)
 	GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.Campaign, error)
-	Create(ctx context.Context, in uc.CreateCampaignInput) (*dtos.Campaign, error)
-	Edit(ctx context.Context, id string, v *entities.Viewer, in uc.EditCampaignInput) (*dtos.Campaign, error)
+	Create(ctx context.Context, in uc.CampaignInput, v *entities.Viewer) (*dtos.Campaign, error)
+	Edit(ctx context.Context, id string, v *entities.Viewer, in uc.CampaignInput) (*dtos.Campaign, error)
 	Delete(ctx context.Context, id string, v *entities.Viewer) error
 	ChangeStatus(ctx context.Context, id string, v *entities.Viewer, status dtos.CampaignStatus) error
 

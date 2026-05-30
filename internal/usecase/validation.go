@@ -53,9 +53,6 @@ func validateSession(in *SessionInput) error {
 			return fmt.Errorf("%w: invalid availability", ErrInvalidData)
 		}
 	}
-	if in.MasterNotes != nil && len(*in.MasterNotes) > 2000 {
-		return fmt.Errorf("%w: notes must be <= 2000 characters", ErrInvalidData)
-	}
 	if in.Address != nil && len(*in.Address) > 400 {
 		return fmt.Errorf("%w: address must be <= 400 characters", ErrInvalidData)
 	}
@@ -232,4 +229,28 @@ func isValidSessionSort(s dtos.SessionListSort) bool {
 		return true
 	}
 	return false
+}
+
+func validateCampaign(in *CampaignInput, v *entities.Viewer) error {
+	if in.Title != nil {
+		trimmed := strings.TrimSpace(*in.Title)
+		in.Title = &trimmed
+		if len(*in.Title) == 0 || len(*in.Title) > 100 {
+			return fmt.Errorf("%w: title must be 1-100 characters", ErrInvalidData)
+		}
+	}
+
+	if in.Description != nil && len(*in.Description) > 2000 {
+		return fmt.Errorf("%w: description must be <= 2000 characters", ErrInvalidData)
+	}
+
+	if in.Availability != nil {
+		switch *in.Availability {
+		case dtos.Open, dtos.Application, dtos.Private:
+		default:
+			return fmt.Errorf("%w: invalid availability", ErrInvalidData)
+		}
+	}
+
+	return nil
 }

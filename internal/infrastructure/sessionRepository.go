@@ -47,7 +47,6 @@ type CreateSessionParams struct {
 	Title         string
 	Description   string
 	Address       string
-	MasterNotes   string
 	PreviewURL    string
 	Format        dtos.SessionFormat
 	Availability  dtos.SessionAvailability
@@ -65,7 +64,6 @@ type UpdateSessionParams struct {
 	Title         *string
 	Description   *string
 	Address       *string
-	MasterNotes   *string
 	PreviewURL    *string
 	Format        *dtos.SessionFormat
 	Availability  *dtos.SessionAvailability
@@ -289,14 +287,14 @@ func (r *sessionRepository) Create(ctx context.Context, p *CreateSessionParams) 
 			"title", "format", "scheduled_at", "system_id", "max_seats", "master_id",
 			"price", "availability", "free_seats",
 			"address", "lat", "lng",
-			"description", "preview_url", "master_notes",
+			"description", "preview_url",
 			"duration_hours",
 		).
 		Values(
 			p.Title, p.Format, p.ScheduledAt, p.SystemID, p.MaxSeats, p.MasterID,
 			p.Price, p.Availability, p.MaxSeats,
 			nullString(p.Address), p.Lat, p.Lng,
-			nullString(p.Description), nullString(p.PreviewURL), nullString(p.MasterNotes),
+			nullString(p.Description), nullString(p.PreviewURL),
 			p.DurationHours,
 		).
 		Suffix("RETURNING id").
@@ -324,9 +322,6 @@ func (r *sessionRepository) Update(ctx context.Context, id string, p *UpdateSess
 	}
 	if p.Address != nil {
 		upd = upd.Set("address", nullString(*p.Address))
-	}
-	if p.MasterNotes != nil {
-		upd = upd.Set("master_notes", nullString(*p.MasterNotes))
 	}
 	if p.PreviewURL != nil {
 		upd = upd.Set("preview_url", nullString(*p.PreviewURL))

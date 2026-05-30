@@ -23,7 +23,7 @@ var sessionColumns = []string{
 	"s.address", "s.lat", "s.lng",
 	"s.type", "s.availability",
 	"COALESCE(s.description, '')", "COALESCE(s.preview_url, '')",
-	"s.max_seats", "s.master_id", "s.price", "COALESCE(s.master_notes, '')",
+	"s.max_seats", "s.master_id", "s.price",
 	"s.status", "s.free_seats", "s.created_at", "s.updated_at",
 	// embedded game system (join on game_systems gs)
 	"gs.id", "gs.slug", "gs.canonical_name", "COALESCE(gs.badge_color, '')", "gs.is_curated",
@@ -54,7 +54,6 @@ func scanSession(row pgx.Row, s *dtos.Session) error {
 		&maxSeats,
 		&s.MasterID,
 		&price,
-		&s.MasterNotes,
 		&s.Status,
 		&freeSeats,
 		&s.CreatedAt,
@@ -94,7 +93,7 @@ func scanSession(row pgx.Row, s *dtos.Session) error {
 // --- campaigns --------------------------------------------------------------
 
 var campaignColumns = []string{
-	"c.id", "c.title", "c.description", "c.master_id", "c.status",
+	"c.id", "c.title", "c.description", "c.master_id", "c.status", "c.availability",
 	"c.created_at", "c.updated_at",
 	"gs.id", "gs.slug", "gs.canonical_name", "COALESCE(gs.badge_color, '')", "gs.is_curated",
 }

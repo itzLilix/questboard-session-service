@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/itzLilix/questboard-session-service/internal/entities"
+	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
 	"github.com/itzLilix/questboard-shared/dtos"
 )
 
@@ -19,7 +20,6 @@ func NewCampaignUsecase(repo CampaignRepository) *campaignUsecase {
 // --- input types -----------------------------------------------------------
 
 type ListCampaignsInput struct {
-	Viewer    *entities.Viewer
 	Search    string
 	MasterID  string
 	SystemID  string
@@ -30,17 +30,11 @@ type ListCampaignsInput struct {
 	SortOrder string
 }
 
-type CreateCampaignInput struct {
-	Viewer      *entities.Viewer
-	Title       string
-	Description *string
-	SystemID    string
-}
-
-type EditCampaignInput struct {
-	Title       *string
-	Description *string
-	SystemID    *string
+type CampaignInput struct {
+	Title        *string
+	Description  *string
+	SystemID     *string
+	Availability *dtos.SessionAvailability
 }
 
 type TieSessionInput struct {
@@ -58,19 +52,59 @@ type EditTieInput struct {
 
 // --- method stubs -----------------------------------------------------------
 
-func (uc *campaignUsecase) List(ctx context.Context, in ListCampaignsInput) (dtos.Page[dtos.Campaign], error) {
+func (uc *campaignUsecase) List(ctx context.Context, in ListCampaignsInput, v *entities.Viewer) (dtos.Page[dtos.Campaign], error) {
 	return dtos.Page[dtos.Campaign]{}, ErrNotFound
 }
 
 func (uc *campaignUsecase) GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.Campaign, error) {
-	return nil, ErrNotFound
+	campaign, err := uc.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, mapRepoErr("get campaign by id", err)
+	}
+	sessions, err := uc.repo.ListSessions(ctx, id)
+	if err != nil {
+		return nil, mapRepoErr("list sessions by campaign id", err)
+	}
+	campaign.Sessions = sessions
+
+	return campaign, nil
 }
 
-func (uc *campaignUsecase) Create(ctx context.Context, in CreateCampaignInput) (*dtos.Campaign, error) {
-	return nil, ErrNotFound
+func (uc *campaignUsecase) Create(ctx context.Context, in CampaignInput, v *entities.Viewer) (*dtos.Campaign, error) {
+	if !v.IsAuthenticated() {
+		return nil, ErrForbidden
+	}
+
+	if in.Title == nil {
+		return nil, ErrInvalidData
+	}
+
+	if err := validateCampaign(&in, v); err != nil {
+		return nil, err
+	}
+
+	status := dtos.CampaignActive
+	masterId := v.UserID
+	availability := dtos.Open
+	if in.Availability != nil {
+		availability = *in.Availability
+	}
+
+	campaign, err := uc.repo.Create(ctx, &infrastructure.CreateCampaignParams{
+		Title:        *in.Title,
+		Description:  in.Description,
+		MasterID:     masterId,
+		SystemID:     in.SystemID,
+		Status:       status,
+		Availability: availability,
+	})
+	if err != nil {
+		return nil, mapRepoErr("create campaign", err)
+	}
+	return campaign, nil
 }
 
-func (uc *campaignUsecase) Edit(ctx context.Context, id string, v *entities.Viewer, in EditCampaignInput) (*dtos.Campaign, error) {
+func (uc *campaignUsecase) Edit(ctx context.Context, id string, v *entities.Viewer, in CampaignInput) (*dtos.Campaign, error) {
 	return nil, ErrNotFound
 }
 

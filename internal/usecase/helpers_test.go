@@ -85,12 +85,6 @@ func TestHasAdvertisedChanges_OnlyDescription(t *testing.T) {
 	assert.False(t, hasAdvertisedChanges(in))
 }
 
-func TestHasAdvertisedChanges_OnlyMasterNotes(t *testing.T) {
-	notes := "some notes"
-	in := &SessionInput{MasterNotes: &notes}
-	assert.False(t, hasAdvertisedChanges(in))
-}
-
 func TestHasAdvertisedChanges_Format(t *testing.T) {
 	f := dtos.Online
 	in := &SessionInput{Format: &f}

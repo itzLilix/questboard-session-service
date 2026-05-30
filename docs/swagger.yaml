@@ -2,6 +2,8 @@ basePath: /
 definitions:
   dtos.Campaign:
     properties:
+      availability:
+        $ref: '#/definitions/dtos.SessionAvailability'
       createdAt:
         type: string
       description:
@@ -10,6 +12,10 @@ definitions:
         type: string
       masterId:
         type: string
+      sessions:
+        items:
+          $ref: '#/definitions/dtos.CampaignSessionTie'
+        type: array
       status:
         $ref: '#/definitions/dtos.CampaignStatus'
       system:
@@ -123,8 +129,6 @@ definitions:
       location:
         $ref: '#/definitions/dtos.Location'
       masterId:
-        type: string
-      masterNotes:
         type: string
       maxSeats:
         type: integer
@@ -363,6 +367,8 @@ definitions:
     type: object
   internal_handlers.CreateCampaignRequest:
     properties:
+      availability:
+        $ref: '#/definitions/dtos.SessionAvailability'
       description:
         type: string
       systemId:
@@ -402,8 +408,6 @@ definitions:
         $ref: '#/definitions/dtos.SessionFormat'
       location:
         $ref: '#/definitions/dtos.Location'
-      masterNotes:
-        type: string
       maxSeats:
         type: integer
       price:
@@ -451,8 +455,6 @@ definitions:
         $ref: '#/definitions/dtos.SessionFormat'
       location:
         $ref: '#/definitions/dtos.Location'
-      masterNotes:
-        type: string
       maxSeats:
         type: integer
       previewUrl:

@@ -2389,6 +2389,9 @@ const docTemplate = `{
         "dtos.Campaign": {
             "type": "object",
             "properties": {
+                "availability": {
+                    "$ref": "#/definitions/dtos.SessionAvailability"
+                },
                 "createdAt": {
                     "type": "string"
                 },
@@ -2400,6 +2403,12 @@ const docTemplate = `{
                 },
                 "masterId": {
                     "type": "string"
+                },
+                "sessions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dtos.CampaignSessionTie"
+                    }
                 },
                 "status": {
                     "$ref": "#/definitions/dtos.CampaignStatus"
@@ -2570,9 +2579,6 @@ const docTemplate = `{
                     "$ref": "#/definitions/dtos.Location"
                 },
                 "masterId": {
-                    "type": "string"
-                },
-                "masterNotes": {
                     "type": "string"
                 },
                 "maxSeats": {
@@ -2924,6 +2930,9 @@ const docTemplate = `{
         "internal_handlers.CreateCampaignRequest": {
             "type": "object",
             "properties": {
+                "availability": {
+                    "$ref": "#/definitions/dtos.SessionAvailability"
+                },
                 "description": {
                     "type": "string"
                 },
@@ -2983,9 +2992,6 @@ const docTemplate = `{
                 },
                 "location": {
                     "$ref": "#/definitions/dtos.Location"
-                },
-                "masterNotes": {
-                    "type": "string"
                 },
                 "maxSeats": {
                     "type": "integer"
@@ -3058,9 +3064,6 @@ const docTemplate = `{
                 },
                 "location": {
                     "$ref": "#/definitions/dtos.Location"
-                },
-                "masterNotes": {
-                    "type": "string"
                 },
                 "maxSeats": {
                     "type": "integer"

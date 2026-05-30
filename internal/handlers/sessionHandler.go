@@ -65,14 +65,12 @@ type CreateSessionRequest struct {
 	DurationHours *float64                  `json:"durationHours,omitempty"`
 	Price         *float64                  `json:"price,omitempty"`
 	Availability  *dtos.SessionAvailability `json:"availability,omitempty"`
-	MasterNotes   *string                   `json:"masterNotes,omitempty"`
 }
 
 type EditSessionRequest struct {
 	Title         *string                   `json:"title,omitempty"`
 	Description   *string                   `json:"description,omitempty"`
 	Location      *dtos.Location            `json:"location,omitempty"`
-	MasterNotes   *string                   `json:"masterNotes,omitempty"`
 	PreviewURL    *string                   `json:"previewUrl,omitempty"`
 	Format        *dtos.SessionFormat       `json:"format,omitempty"`
 	Availability  *dtos.SessionAvailability `json:"availability,omitempty"`
@@ -259,7 +257,6 @@ func (h *sessionHandler) create(c fiber.Ctx) error {
 		ScheduledAt:   req.ScheduledAt,
 		MaxSeats:      &maxSeats,
 		Description:   req.Description,
-		MasterNotes:   req.MasterNotes,
 		//PreviewURL:    &req.PreviewURL,
 		Price:         req.Price,
 		Availability:  req.Availability,
@@ -303,7 +300,6 @@ func (h *sessionHandler) edit(c fiber.Ctx) error {
 	in := usecase.SessionInput{
 		Title:         req.Title,
 		Description:   req.Description,
-		MasterNotes:   req.MasterNotes,
 		//PreviewURL:    req.PreviewURL,
 		Format:        req.Format,
 		Availability:  req.Availability,

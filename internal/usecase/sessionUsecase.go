@@ -62,7 +62,6 @@ type SessionInput struct {
 	Title         *string
 	Description   *string
 	Address       *string
-	MasterNotes   *string
 	//PreviewURL    *string
 	Format        *dtos.SessionFormat
 	Availability  *dtos.SessionAvailability
@@ -166,7 +165,6 @@ func (uc *sessionUsecase) Create(ctx context.Context, in SessionInput, v *entiti
 	params := &infrastructure.CreateSessionParams{
 		Title:         *in.Title,
 		Description:   inOr(in.Description, ""),
-		MasterNotes:   inOr(in.MasterNotes, ""),
 		//PreviewURL:    in.PreviewURL,
 		Format:        *in.Format,
 		Availability:  inOr(in.Availability, DEFAULT_AVAILABILITY),
@@ -225,7 +223,6 @@ func (uc *sessionUsecase) Edit(ctx context.Context, id string, v *entities.Viewe
 		Title:         in.Title,
 		Description:   in.Description,
 		Address:       in.Address,
-		MasterNotes:   in.MasterNotes,
 		//PreviewURL:    in.PreviewURL,
 		Format:        in.Format,
 		Availability:  in.Availability,
@@ -343,10 +340,7 @@ func (uc *sessionUsecase) isParticipant(ctx context.Context, s *dtos.Session, v 
 	if err != nil {
 		return false, mapRepoErr("check participant", err)
 	}
-	if !isPlayer && !v.CanActAs(s.MasterID) {
-		return false, nil
-	}
-	return true, nil
+	return isPlayer || v.CanActAs(s.MasterID), nil
 }
 
 func (uc *sessionUsecase) ListPlayers(ctx context.Context, sessionID string, v *entities.Viewer) (*dtos.SessionPlayersResponse, error) {
@@ -365,16 +359,11 @@ func (uc *sessionUsecase) ListPlayers(ctx context.Context, sessionID string, v *
 	}
 
 	if session.Availability == dtos.Private {
-		allowed := v.CanActAs(session.MasterID)
-		if !allowed {
-			for _, p := range players {
-				if v.Is(p.PlayerID) {
-					allowed = true
-					break
-				}
-			}
+		playerIDs := make([]string, 0, len(players))
+		for _, p := range players {
+			playerIDs = append(playerIDs, p.PlayerID)
 		}
-		if !allowed {
+		if !v.IsMasterOrPlayer(session.MasterID, playerIDs) {
 			return nil, ErrForbidden
 		}
 	}

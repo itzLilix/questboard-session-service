@@ -2,7 +2,10 @@ package handlers
 
 import (
 	"github.com/gofiber/fiber/v3"
+	"github.com/itzLilix/questboard-session-service/internal/entities"
 	"github.com/itzLilix/questboard-session-service/internal/middleware"
+	uc "github.com/itzLilix/questboard-session-service/internal/usecase"
+	"github.com/itzLilix/questboard-shared/dtos"
 	"github.com/rs/zerolog"
 )
 
@@ -25,9 +28,10 @@ func NewCampaignHandler(uc CampaignUsecase, rbac middleware.RBACMiddleware, log 
 }
 
 type CreateCampaignRequest struct {
-	Title       string  `json:"title"`
-	SystemID    string  `json:"systemId"`
-	Description *string `json:"description,omitempty"`
+	Title        string                    `json:"title"`
+	SystemID     string                    `json:"systemId"`
+	Description  *string                   `json:"description,omitempty"`
+	Availability *dtos.SessionAvailability `json:"availability,omitempty"`
 }
 
 type EditCampaignRequest struct {
@@ -97,7 +101,13 @@ func (h *campaignHandler) list(c fiber.Ctx) error { return c.SendStatus(fiber.St
 // @Failure      500  {object} ErrorResponse
 // @Router       /v1/campaigns/{id} [get]
 func (h *campaignHandler) getByID(c fiber.Ctx) error {
-	return c.SendStatus(fiber.StatusNotImplemented)
+	id := c.Params("id")
+	campaign, err := h.uc.GetByID(c.Context(), id, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		h.log.Error().Err(err).Str("sessionId", id).Msg("get session by id failed")
+		return handleErr(c, err)
+	}
+	return c.Status(fiber.StatusOK).JSON(campaign)
 }
 
 // @Summary      Create a campaign
@@ -111,7 +121,25 @@ func (h *campaignHandler) getByID(c fiber.Ctx) error {
 // @Failure      500   {object} ErrorResponse
 // @Security     CookieAuth
 // @Router       /v1/campaigns [post]
-func (h *campaignHandler) create(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
+func (h *campaignHandler) create(c fiber.Ctx) error { 
+	var q CreateCampaignRequest
+	if err := c.Bind().Body(&q); err != nil {
+		h.log.Error().Err(err).Msg("invalid request body in CreateCampaignRequest")
+		return handleErr(c, uc.ErrInvalidData)
+	}
+
+	campaign, err := h.uc.Create(c, uc.CampaignInput{
+		Title:        &q.Title,
+		Description:  q.Description,
+		SystemID:     &q.SystemID,
+		Availability: q.Availability,
+	}, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		return handleErr(c, err)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(campaign)
+}
 
 // @Summary      Edit a campaign
 // @Tags         campaigns
