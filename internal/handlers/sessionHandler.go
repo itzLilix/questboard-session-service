@@ -411,7 +411,15 @@ func (h *sessionHandler) listPlayers(c fiber.Ctx) error {
 // @Failure      409  {object} ErrorResponse
 // @Security     CookieAuth
 // @Router       /v1/sessions/{id}/join [post]
-func (h *sessionHandler) join(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
+func (h *sessionHandler) join(c fiber.Ctx) error {
+	sessionId := c.Params("id")
+	err := h.uc.Join(c.Context(), sessionId, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		h.log.Error().Err(err).Str("sessionId", sessionId).Msg("join session request failed")
+		return handleErr(c, err)
+	}
+	return c.SendStatus(fiber.StatusNotImplemented)
+}
 
 // @Summary      Leave a session
 // @Tags         sessions
