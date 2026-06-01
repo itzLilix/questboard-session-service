@@ -351,11 +351,11 @@ func TestValidateListSessions_PlayingScope_Unauthenticated_NoPlayerID(t *testing
 func TestValidateListSessions_ValidFormat(t *testing.T) {
 	v := authenticatedViewer("user-1")
 
-	for _, f := range []string{"online", "offline"} {
+	for _, f := range []dtos.SessionFormat{dtos.Online, dtos.Offline} {
 		in := &ListSessionsInput{Format: f}
 		p, err := validateListSessions(in, v)
 		require.NoError(t, err)
-		assert.Equal(t, dtos.SessionFormat(f), p.Format)
+		assert.Equal(t, f, p.Format)
 	}
 }
 
@@ -371,11 +371,11 @@ func TestValidateListSessions_InvalidFormat(t *testing.T) {
 func TestValidateListSessions_ValidType(t *testing.T) {
 	v := authenticatedViewer("user-1")
 
-	for _, tp := range []string{"oneshot", "campaign"} {
+	for _, tp := range []dtos.SessionType{dtos.OneshotType, dtos.CampaignType} {
 		in := &ListSessionsInput{Type: tp}
 		p, err := validateListSessions(in, v)
 		require.NoError(t, err)
-		assert.Equal(t, dtos.SessionType(tp), p.Type)
+		assert.Equal(t, tp, p.Type)
 	}
 }
 

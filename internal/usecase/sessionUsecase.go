@@ -42,8 +42,8 @@ type ListSessionsInput struct {
 	Status   []string
 
 	Search       string
-	Format       string
-	Type         string
+	Format       dtos.SessionFormat
+	Type         dtos.SessionType
 	City         string
 	GSIncluded   []string 
 	GSExcluded   []string 
@@ -142,7 +142,15 @@ func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Vi
 	}
 	users := uc.enrich(ctx, ids)
 
-	return &dtos.SessionResponse{Session: *s, Players: players, Users: users}, nil
+	var campaignRef *dtos.SessionCampaignRef
+	if s.Type == dtos.CampaignType {
+		campaignRef, err = uc.repo.GetCampaignRef(ctx, id)
+		if err != nil {
+			return nil, mapRepoErr("get campaign ref for get session by id", err)
+		}
+	}
+
+	return &dtos.SessionResponse{Session: *s, Players: players, Users: users, CampaignRef: campaignRef}, nil
 }
 
 func (uc *sessionUsecase) Create(ctx context.Context, in SessionInput, v *entities.Viewer) (*dtos.Session, error) {
@@ -381,13 +389,61 @@ func (uc *sessionUsecase) ListPlayers(ctx context.Context, sessionID string, v *
 }
 
 func (uc *sessionUsecase) Join(ctx context.Context, sessionID string, v *entities.Viewer) error {
-	//check if player_session exists
-	//check if not banned/kicked
-	//if leaved just update status
-	//if allowed join transaction
-	return ErrNotFound
+	if !v.IsAuthenticated() { return ErrForbidden }
+
+	s, err := uc.repo.GetByID(ctx, sessionID)
+	if err != nil {
+		return mapRepoErr("join session: find session", err)
+	}
+
+	if v.Is(s.MasterID) { return ErrForbidden }
+	if s.Availability != dtos.Open || s.Status == dtos.Draft { return ErrNotFound }
+	if s.Status != dtos.Published && s.Status != dtos.Ongoing { return ErrForbidden }
+
+	//check players existence
+
+	err = uc.repo.Join(ctx, sessionID, v.UserID)
+	if err != nil {
+		return mapRepoErr("join session", err)
+	}
+	return nil
 
 }
+
+func (uc *sessionUsecase) AddPlayers(ctx context.Context, sessionID string, playerIDs []string, v *entities.Viewer) error {
+	if !v.IsAuthenticated() { return ErrForbidden }
+	if len(playerIDs) == 0 { return nil }
+
+	s, err := uc.repo.GetByID(ctx, sessionID)
+	if err != nil {
+		return mapRepoErr("add players: find session", err)
+	}
+
+	if !v.CanActAs(s.MasterID) { return ErrForbidden }
+	if s.Status != dtos.Published && s.Status != dtos.Ongoing { return ErrInvalidStatus }
+	
+	seen := make(map[string]struct{}, len(playerIDs))
+	deduped := make([]string, 0, len(playerIDs))
+	for _, id := range playerIDs {
+		if id == s.MasterID { return ErrForbidden }
+		if id == "" { continue }
+		if _, ok := seen[id]; ok { continue	}
+		
+		seen[id] = struct{}{}
+		deduped = append(deduped, id)
+	}
+	if len(deduped) > int(s.MaxSeats) { return ErrInvalidData }
+	if len(deduped) == 0 { return nil }
+
+	//check players existence
+
+	err = uc.repo.AddPlayers(ctx, sessionID, deduped)
+	if err != nil {
+		return mapRepoErr("add plyers", err)
+	}
+	return nil
+}
+
 
 func (uc *sessionUsecase) Leave(ctx context.Context, sessionID string, v *entities.Viewer) error {
 	return ErrNotFound

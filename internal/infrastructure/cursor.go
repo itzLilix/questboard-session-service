@@ -113,3 +113,82 @@ func buildNextCursor(last dtos.Session, sortKey dtos.SessionListSort, sortOrder 
 	}
 	return cursor.EncodeCursor(c)
 }
+
+// --- campaign-specific cursor -----------------------------------------------
+
+// campaignCursor carries the sort state + position needed to continue a page.
+// Sort + SortOrder are validated against the current request at
+// applyCampaignCursor time so paginating with a different sort produces
+// cursor.ErrInvalidCursor.
+type campaignCursor struct {
+	Sort       dtos.CampaignListSort `json:"s"`
+	SortOrder  dtos.SortOrder        `json:"o"`
+	CreatedAt  *time.Time            `json:"c,omitempty"`
+	Title      *string               `json:"t,omitempty"`
+	StatusRank *int                  `json:"sr,omitempty"`
+	ID         string                `json:"id"`
+}
+
+// applyCampaignCursor adds the keyset-pagination WHERE clause to q based on the
+// previous page's cursor. nil cursor → unchanged q. Sort/order mismatch between
+// cursor and current request → cursor.ErrInvalidCursor.
+func applyCampaignCursor(q sq.SelectBuilder, c *campaignCursor, sortKey dtos.CampaignListSort, sortOrder dtos.SortOrder) (sq.SelectBuilder, error) {
+	if c == nil {
+		return q, nil
+	}
+	if c.Sort != sortKey || c.SortOrder != sortOrder {
+		return q, cursor.ErrInvalidCursor
+	}
+
+	sortCol, ok := campaignSortColumns[sortKey]
+	if !ok {
+		return q, cursor.ErrInvalidCursor
+	}
+
+	op := "<"
+	if sortOrder == dtos.SortAsc {
+		op = ">"
+	}
+
+	switch sortKey {
+	case dtos.SortCampaignCreatedAt:
+		if c.CreatedAt == nil {
+			return q, cursor.ErrInvalidCursor
+		}
+		return q.Where(fmt.Sprintf("(%s, c.id) %s (?, ?)", sortCol, op), *c.CreatedAt, c.ID), nil
+	case dtos.SortCampaignTitle:
+		if c.Title == nil {
+			return q, cursor.ErrInvalidCursor
+		}
+		return q.Where(fmt.Sprintf("(%s, c.id) %s (?, ?)", sortCol, op), *c.Title, c.ID), nil
+	case dtos.SortCampaignStatus:
+		if c.StatusRank == nil {
+			return q, cursor.ErrInvalidCursor
+		}
+		return q.Where(fmt.Sprintf("(%s, c.id) %s (?, ?)", sortCol, op), *c.StatusRank, c.ID), nil
+	}
+
+	return q.Where(fmt.Sprintf("c.id %s ?", op), c.ID), nil
+}
+
+// buildNextCampaignCursor builds the cursor string from the last visible row of
+// the current page.
+func buildNextCampaignCursor(last dtos.Campaign, sortKey dtos.CampaignListSort, sortOrder dtos.SortOrder) (string, error) {
+	c := campaignCursor{
+		Sort:      sortKey,
+		SortOrder: sortOrder,
+		ID:        last.ID,
+	}
+	switch sortKey {
+	case dtos.SortCampaignCreatedAt:
+		v := last.CreatedAt
+		c.CreatedAt = &v
+	case dtos.SortCampaignTitle:
+		v := last.Title
+		c.Title = &v
+	case dtos.SortCampaignStatus:
+		v := campaignStatusRank(last.Status)
+		c.StatusRank = &v
+	}
+	return cursor.EncodeCursor(c)
+}

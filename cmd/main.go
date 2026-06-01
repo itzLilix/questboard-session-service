@@ -77,7 +77,7 @@ func main() {
 
 	gameSystemsUsecase := usecase.NewGameSystemsUsecase(gameSystemsRepo)
 	sessionUsecase := usecase.NewSessionUsecase(sessionRepo, profileClient, profileClient)
-	campaignUsecase := usecase.NewCampaignUsecase(campaignRepo)
+	campaignUsecase := usecase.NewCampaignUsecase(campaignRepo, sessionRepo)
 	characterUsecase := usecase.NewCharacterUsecase()
 
 	v1 := app.Group("/v1")

@@ -27,17 +27,29 @@ func NewCampaignHandler(uc CampaignUsecase, rbac middleware.RBACMiddleware, log 
 	}
 }
 
+type CampaignFilter struct {
+	Search    string `query:"search"`
+	MasterID  string `query:"masterId"`
+	SystemID  string `query:"systemId"`
+	Status    string `query:"status"`
+	Sort      string `query:"sort"`
+	SortOrder string `query:"order"`
+	Cursor    string `query:"cursor"`
+	Limit     int    `query:"limit"`
+}
+
 type CreateCampaignRequest struct {
 	Title        string                    `json:"title"`
-	SystemID     string                    `json:"systemId"`
 	Description  *string                   `json:"description,omitempty"`
-	Availability *dtos.SessionAvailability `json:"availability,omitempty"`
+	Availability dtos.SessionAvailability `json:"availability"`
+	SystemID     string                    `json:"systemId"`
 }
 
 type EditCampaignRequest struct {
 	Title       *string `json:"title,omitempty"`
-	SystemID    *string `json:"systemId,omitempty"`
 	Description *string `json:"description,omitempty"`
+	Availability *dtos.SessionAvailability `json:"availability,omitempty"`
+	SystemID    *string `json:"systemId,omitempty"`
 }
 
 type ChangeCampaignStatusRequest struct {
@@ -82,14 +94,40 @@ func (h *campaignHandler) RegisterRoutes(app fiber.Router) {
 // @Param        masterId  query   string  false "Filter by master user ID"
 // @Param        systemId  query   string  false "Filter by game system ID"
 // @Param        status    query   string  false "Status filter" Enums(active, completed, cancelled, paused)
-// @Param        sort      query   string  false "Sort field"
+// @Param        sort      query   string  false "Sort field" Enums(created_at, title, status)
 // @Param        order     query   string  false "Sort order" Enums(ASC, DESC)
 // @Param        cursor    query   string  false "Pagination cursor"
 // @Param        limit     query   integer false "Page size"
 // @Success      200  {object}  object{items=[]dtos.Campaign,nextCursor=string}
+// @Failure      400  {object}  ErrorResponse
 // @Failure      500  {object}  ErrorResponse
 // @Router       /v1/campaigns [get]
-func (h *campaignHandler) list(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
+func (h *campaignHandler) list(c fiber.Ctx) error {
+	var f CampaignFilter
+	if err := c.Bind().Query(&f); err != nil {
+		h.log.Warn().Err(err).Msg("invalid list campaigns query")
+		return handleErr(c, uc.ErrInvalidData)
+	}
+
+	page, err := h.uc.List(c.Context(), uc.ListCampaignsInput{
+		Search:    f.Search,
+		MasterID:  f.MasterID,
+		SystemID:  f.SystemID,
+		Status:    f.Status,
+		Sort:      f.Sort,
+		SortOrder: f.SortOrder,
+		Cursor:    f.Cursor,
+		Limit:     f.Limit,
+	}, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		h.log.Error().Err(err).Msg("list campaigns failed")
+		return handleErr(c, err)
+	}
+	if page.Items == nil {
+		page.Items = []dtos.Campaign{}
+	}
+	return c.Status(fiber.StatusOK).JSON(page)
+}
 
 // @Summary      Get campaign by ID
 // @Tags         campaigns
@@ -128,11 +166,11 @@ func (h *campaignHandler) create(c fiber.Ctx) error {
 		return handleErr(c, uc.ErrInvalidData)
 	}
 
-	campaign, err := h.uc.Create(c, uc.CampaignInput{
+	campaign, err := h.uc.Create(c.Context(), uc.CampaignInput{
 		Title:        &q.Title,
 		Description:  q.Description,
 		SystemID:     &q.SystemID,
-		Availability: q.Availability,
+		Availability: &q.Availability,
 	}, entities.BuildViewerFromCtx(c))
 	if err != nil {
 		return handleErr(c, err)
@@ -212,7 +250,20 @@ func (h *campaignHandler) listSessions(c fiber.Ctx) error {
 // @Security     CookieAuth
 // @Router       /v1/campaigns/{id}/sessions [post]
 func (h *campaignHandler) tieSession(c fiber.Ctx) error {
-	return c.SendStatus(fiber.StatusNotImplemented)
+	campaignId := c.Params("id")
+
+	var req TieSessionRequest
+	c.Bind().Body(&req)
+
+	err := h.uc.TieSession(c.Context(), campaignId, uc.TieSessionInput{
+		SessionID: req.SessionID,
+		OrderIndex: req.OrderIndex,
+		BriefDescription: req.BriefDescription,
+	}, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		return handleErr(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // @Summary      Remove a session from a campaign

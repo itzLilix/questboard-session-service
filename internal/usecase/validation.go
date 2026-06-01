@@ -106,14 +106,12 @@ func validateListSessions(in *ListSessionsInput, v *entities.Viewer) (infrastruc
 		}
 	}
 
-	// --- format / type strings → typed enums ---------------------------------
-	format := dtos.SessionFormat(in.Format)
-	if in.Format != "" && format != dtos.Online && format != dtos.Offline {
+	// --- format / type membership check --------------------------------------
+	if in.Format != "" && in.Format != dtos.Online && in.Format != dtos.Offline {
 		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: invalid format %q", ErrInvalidData, in.Format)
 	}
 
-	stype := dtos.SessionType(in.Type)
-	if in.Type != "" && stype != dtos.OneshotType && stype != dtos.CampaignType {
+	if in.Type != "" && in.Type != dtos.OneshotType && in.Type != dtos.CampaignType {
 		return infrastructure.ListSessionsParams{}, fmt.Errorf("%w: invalid type %q", ErrInvalidData, in.Type)
 	}
 
@@ -202,8 +200,8 @@ func validateListSessions(in *ListSessionsInput, v *entities.Viewer) (infrastruc
 		Status:         statuses,
 		TargetIsViewer: targetIsViewer,
 		Search:         in.Search,
-		Format:         format,
-		Type:           stype,
+		Format:         in.Format,
+		Type:           in.Type,
 		City:           in.City,
 		SystemsIn:		sysIncluded,
 		SystemsEx:      sysExcluded,
@@ -231,6 +229,86 @@ func isValidSessionSort(s dtos.SessionListSort) bool {
 	return false
 }
 
+func validateListCampaigns(in *ListCampaignsInput, v *entities.Viewer) (infrastructure.ListCampaignsParams, error) {
+	// --- status --------------------------------------------------------------
+	var status dtos.CampaignStatus
+	if in.Status != "" {
+		status = dtos.CampaignStatus(in.Status)
+		if !isValidCampaignStatus(status) {
+			return infrastructure.ListCampaignsParams{}, fmt.Errorf("%w: invalid status %q", ErrInvalidData, in.Status)
+		}
+	}
+
+	// --- sort key ------------------------------------------------------------
+	var sort dtos.CampaignListSort
+	if in.Sort == "" {
+		sort = dtos.SortCampaignCreatedAt
+	} else {
+		sort = dtos.CampaignListSort(in.Sort)
+		if !isValidCampaignSort(sort) {
+			return infrastructure.ListCampaignsParams{}, fmt.Errorf("%w: invalid sort %q", ErrInvalidData, in.Sort)
+		}
+	}
+
+	// --- sort order ----------------------------------------------------------
+	var order dtos.SortOrder
+	switch strings.ToUpper(in.SortOrder) {
+	case "", "ASC":
+		order = dtos.SortAsc
+	case "DESC":
+		order = dtos.SortDesc
+	default:
+		return infrastructure.ListCampaignsParams{}, fmt.Errorf("%w: invalid order %q", ErrInvalidData, in.SortOrder)
+	}
+
+	// --- limit ---------------------------------------------------------------
+	limit := in.Limit
+	if limit <= 0 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+
+	// --- visibility policy ---------------------------------------------------
+	// A catalog browse exposes only public campaigns. Admins see everything, and
+	// a master querying their own campaigns (masterId == self) sees their private
+	// ones too — that's the "my campaigns" view.
+	publicOnly := true
+	if v.IsAdmin() {
+		publicOnly = false
+	} else if in.MasterID != "" && v.Is(in.MasterID) {
+		publicOnly = false
+	}
+
+	return infrastructure.ListCampaignsParams{
+		Search:     in.Search,
+		MasterID:   in.MasterID,
+		SystemID:   in.SystemID,
+		Status:     string(status),
+		PublicOnly: publicOnly,
+		Cursor:     in.Cursor,
+		Limit:      limit,
+		Sort:       sort,
+		SortOrder:  order,
+	}, nil
+}
+
+func isValidCampaignSort(s dtos.CampaignListSort) bool {
+	switch s {
+	case dtos.SortCampaignCreatedAt, dtos.SortCampaignTitle, dtos.SortCampaignStatus:
+		return true
+	}
+	return false
+}
+
+func isValidCampaignStatus(s dtos.CampaignStatus) bool {
+	switch s {
+	case dtos.CampaignActive, dtos.CampaignCompleted, dtos.CampaignCancelled, dtos.CampaignPaused:
+		return true
+	}
+	return false
+}
+
 func validateCampaign(in *CampaignInput, v *entities.Viewer) error {
 	if in.Title != nil {
 		trimmed := strings.TrimSpace(*in.Title)
@@ -246,7 +324,7 @@ func validateCampaign(in *CampaignInput, v *entities.Viewer) error {
 
 	if in.Availability != nil {
 		switch *in.Availability {
-		case dtos.Open, dtos.Application, dtos.Private:
+		case dtos.Open, dtos.Private:
 		default:
 			return fmt.Errorf("%w: invalid availability", ErrInvalidData)
 		}

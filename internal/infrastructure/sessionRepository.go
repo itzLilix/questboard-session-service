@@ -280,6 +280,34 @@ func (r *sessionRepository) GetByID(ctx context.Context, id string) (*dtos.Sessi
 	return s, nil
 }
 
+// GetCampaignRef returns the campaign tie for a session (campaign id + order
+// index within the campaign), or nil when the session is a standalone oneshot.
+// A session belongs to at most one campaign (UNIQUE on campaign_sessions.session_id).
+func (r *sessionRepository) GetCampaignRef(ctx context.Context, sessionID string) (*dtos.SessionCampaignRef, error) {
+	query, args, err := r.psql.
+		Select("cs.campaign_id", "cs.order_index, c.title").
+		From("campaign_sessions cs").
+		Join("campaigns c ON c.id = cs.campaign_id").
+		Where(sq.Eq{"cs.session_id": sessionID}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build get campaign ref query: %w", err)
+	}
+
+	var (
+		ref        dtos.SessionCampaignRef
+		orderIndex int16
+	)
+	if err := r.db.QueryRow(ctx, query, args...).Scan(&ref.CampaignID, &orderIndex, &ref.Title); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("scan campaign ref: %w", err)
+	}
+	ref.Index = int(orderIndex)
+	return &ref, nil
+}
+
 func (r *sessionRepository) Create(ctx context.Context, p *CreateSessionParams) (*dtos.Session, error) {
 	insert, args, err := r.psql.
 		Insert("sessions").
@@ -467,8 +495,194 @@ func (r *sessionRepository) ListPlayers(ctx context.Context, sessionID string) (
 	return players, nil
 }
 
-func (r *sessionRepository) Join(ctx context.Context, sessionID, playerID string, characterID *string) error {
-	return nil
+func (r *sessionRepository) Join(ctx context.Context, sessionID, playerID string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin join tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// 1. Lock the session row; read capacity input. FOR UPDATE serializes joiners.
+	lockSQL, lockArgs, err := r.psql.
+		Select("max_seats").
+		From("sessions").
+		Where(sq.Eq{"id": sessionID}).
+		Suffix("FOR UPDATE").
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build lock session: %w", err)
+	}
+	var maxSeats int16
+	if err := tx.QueryRow(ctx, lockSQL, lockArgs...).Scan(&maxSeats); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("lock session: %w", err)
+	}
+
+	// 2. Existing membership (covered by the session lock).
+	memSQL, memArgs, err := r.psql.
+		Select("status").
+		From("session_players").
+		Where(sq.Eq{"session_id": sessionID, "player_id": playerID}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build read membership: %w", err)
+	}
+	var current dtos.SessionPlayerStatus
+	switch err := tx.QueryRow(ctx, memSQL, memArgs...).Scan(&current); {
+	case err == nil:
+		switch current {
+		case dtos.PlayerActive:
+			return nil // already seated; idempotent success
+		case dtos.PlayerKicked:
+			return ErrPlayerKicked
+		}
+		// PlayerLeft -> fall through and re-seat
+	case errors.Is(err, pgx.ErrNoRows):
+		// not a member yet -> fall through and seat
+	default:
+		return fmt.Errorf("read membership: %w", err)
+	}
+
+	// 3. Authoritative capacity check — COUNT(active) is reliable under the lock.
+	cntSQL, cntArgs, err := r.psql.
+		Select("count(*)").
+		From("session_players").
+		Where(sq.Eq{"session_id": sessionID, "status": dtos.PlayerActive}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build count active: %w", err)
+	}
+	var active int64
+	if err := tx.QueryRow(ctx, cntSQL, cntArgs...).Scan(&active); err != nil {
+		return fmt.Errorf("count active players: %w", err)
+	}
+	if active >= int64(maxSeats) {
+		return ErrNoSeats
+	}
+
+	// 4. Seat the player: insert, or flip left->active. Kicked stays blocked by the WHERE.
+	upsertSQL, upsertArgs, err := r.psql.
+		Insert("session_players").
+		Columns("session_id", "player_id", "status").
+		Values(sessionID, playerID, dtos.PlayerActive).
+		Suffix(
+			"ON CONFLICT (session_id, player_id) DO UPDATE SET status = ? "+
+				"WHERE session_players.status = ?",
+			dtos.PlayerActive, dtos.PlayerLeft,
+		).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build upsert player: %w", err)
+	}
+	if _, err := tx.Exec(ctx, upsertSQL, upsertArgs...); err != nil {
+		return fmt.Errorf("upsert player: %w", err)
+	}
+
+	// 5. Re-sync the free_seats cache from the authoritative count (self-healing).
+	syncSQL, syncArgs, err := r.psql.
+		Update("sessions").
+		Set("free_seats", sq.Expr(
+			"max_seats - (SELECT count(*) FROM session_players "+
+				"WHERE session_id = ? AND status = ?)",
+			sessionID, dtos.PlayerActive,
+		)).
+		Where(sq.Eq{"id": sessionID}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build sync free_seats: %w", err)
+	}
+	if _, err := tx.Exec(ctx, syncSQL, syncArgs...); err != nil {
+		return fmt.Errorf("sync free_seats: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (r *sessionRepository) AddPlayers(ctx context.Context, sessionID string, playerIDs []string) error {
+	if len(playerIDs) == 0 {
+		return nil
+	}
+
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin add players tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// 1. Lock the session; read capacity input.
+	lockSQL, lockArgs, err := r.psql.
+		Select("max_seats").
+		From("sessions").
+		Where(sq.Eq{"id": sessionID}).
+		Suffix("FOR UPDATE").
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build lock session: %w", err)
+	}
+	var maxSeats int16
+	if err := tx.QueryRow(ctx, lockSQL, lockArgs...).Scan(&maxSeats); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("lock session: %w", err)
+	}
+
+	// 2. Active players NOT in this batch. After the upsert every id in the batch
+	//    is active, so final active = activeOutside + len(playerIDs).
+	cntSQL, cntArgs, err := r.psql.
+		Select("count(*)").
+		From("session_players").
+		Where(sq.Eq{"session_id": sessionID, "status": dtos.PlayerActive}).
+		Where(sq.NotEq{"player_id": playerIDs}). // NOT IN (...)
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build count active outside: %w", err)
+	}
+	var activeOutside int64
+	if err := tx.QueryRow(ctx, cntSQL, cntArgs...).Scan(&activeOutside); err != nil {
+		return fmt.Errorf("count active outside: %w", err)
+	}
+	if activeOutside+int64(len(playerIDs)) > int64(maxSeats) {
+		return ErrNoSeats // all-or-nothing
+	}
+
+	// 3. Bulk seat — master overrides kicked/left, so no WHERE guard.
+	ins := r.psql.
+		Insert("session_players").
+		Columns("session_id", "player_id", "status")
+	for _, pid := range playerIDs {
+		ins = ins.Values(sessionID, pid, dtos.PlayerActive)
+	}
+	insSQL, insArgs, err := ins.
+		Suffix("ON CONFLICT (session_id, player_id) DO UPDATE SET status = ?", dtos.PlayerActive).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build bulk upsert: %w", err)
+	}
+	if _, err := tx.Exec(ctx, insSQL, insArgs...); err != nil {
+		return fmt.Errorf("bulk upsert players: %w", err)
+	}
+
+	// 4. Re-sync the free_seats cache from the count (self-healing).
+	syncSQL, syncArgs, err := r.psql.
+		Update("sessions").
+		Set("free_seats", sq.Expr(
+			"max_seats - (SELECT count(*) FROM session_players "+
+				"WHERE session_id = ? AND status = ?)",
+			sessionID, dtos.PlayerActive,
+		)).
+		Where(sq.Eq{"id": sessionID}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build sync free_seats: %w", err)
+	}
+	if _, err := tx.Exec(ctx, syncSQL, syncArgs...); err != nil {
+		return fmt.Errorf("sync free_seats: %w", err)
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (r *sessionRepository) Leave(ctx context.Context, sessionID, playerID string) error {

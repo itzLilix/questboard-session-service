@@ -35,10 +35,10 @@ type SessionFilter struct {
 	PlayerID string            `query:"playerId"`
 	Status   []string          `query:"status"`
 
-	Search       string   `query:"search"`
-	Format       string   `query:"format"`
-	Type         string   `query:"type"`
-	City         string   `query:"city"`
+	Search       string             `query:"search"`
+	Format       dtos.SessionFormat `query:"format"`
+	Type         dtos.SessionType   `query:"type"`
+	City         string             `query:"city"`
 	GSIncluded   []string `query:"systemIncluded"`
 	GSExcluded   []string `query:"systemExcluded"`
 	FreeSeats 	 int      `query:"freeSeats"`
@@ -85,6 +85,10 @@ type ChangeStatusRequest struct {
 	Status dtos.SessionStatus `json:"status"`
 }
 
+type AddPlayersRequest struct {
+	PlayerIDs []string `json:"playerIds"`
+}
+
 func (h *sessionHandler) RegisterRoutes(app fiber.Router) {
 	s := app.Group("/sessions")
 	
@@ -98,6 +102,7 @@ func (h *sessionHandler) RegisterRoutes(app fiber.Router) {
 	
 	s.Get("/:id/players", h.rbac.Optional(), h.listPlayers)
 	s.Post("/:id/join",   h.rbac.Protected(), h.join)
+	s.Post("/:id/players", h.rbac.Protected(), h.addPlayers)
     s.Delete("/:id/leave", h.rbac.Protected(), h.leave)
 	s.Delete("/:id/players/:playerId", h.rbac.Protected(), h.kickPlayer)
 
@@ -418,7 +423,36 @@ func (h *sessionHandler) join(c fiber.Ctx) error {
 		h.log.Error().Err(err).Str("sessionId", sessionId).Msg("join session request failed")
 		return handleErr(c, err)
 	}
-	return c.SendStatus(fiber.StatusNotImplemented)
+	return c.SendStatus(fiber.StatusOK)
+}
+
+// @Summary      Master adds players 
+// @Tags         sessions
+// @Param        id   path  string  true  "Session ID"
+// @Param        body  body   AddPlayersRequest  true  "Players' IDs"
+// @Success      200
+// @Failure      400  {object} ErrorResponse
+// @Failure      401  {object} ErrorResponse
+// @Failure 	 403  {object} ErrorResponse
+// @Failure      404  {object} ErrorResponse
+// @Failure      409  {object} ErrorResponse
+// @Security     CookieAuth
+// @Router       /v1/sessions/{id}/players [post]
+func (h *sessionHandler) addPlayers(c fiber.Ctx) error {
+	sessionId := c.Params("id")
+
+	var body AddPlayersRequest
+	if err := c.Bind().Body(&body); err != nil {
+		h.log.Warn().Err(err).Msg("invalid add players body")
+		return handleErr(c, usecase.ErrInvalidData)
+	}
+
+	err := h.uc.AddPlayers(c.Context(), sessionId, body.PlayerIDs, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		h.log.Error().Err(err).Str("sessionId", sessionId).Msg("add players request failed")
+		return handleErr(c, err)
+	}
+	return c.SendStatus(fiber.StatusOK)
 }
 
 // @Summary      Leave a session

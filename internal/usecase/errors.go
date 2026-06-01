@@ -37,5 +37,7 @@ func mapRepoErr(op string, err error) error {
 	if errors.Is(err, cursor.ErrInvalidCursor) {
 		return fmt.Errorf("%s: %w: invalid cursor", op, ErrInvalidCursor)
 	}
+	if errors.Is(err, infrastructure.ErrNoSeats)      { return ErrSeatUnavailable }
+	if errors.Is(err, infrastructure.ErrPlayerKicked) { return ErrForbidden }
 	return errors.Join(fmt.Errorf("%s: %w", op, err), ErrInternal)
 }

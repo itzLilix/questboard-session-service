@@ -10,11 +10,12 @@ import (
 )
 
 type campaignUsecase struct {
-	repo CampaignRepository
+	repo     CampaignRepository
+	sessions SessionRepository
 }
 
-func NewCampaignUsecase(repo CampaignRepository) *campaignUsecase {
-	return &campaignUsecase{repo: repo}
+func NewCampaignUsecase(repo CampaignRepository, sessions SessionRepository) *campaignUsecase {
+	return &campaignUsecase{repo: repo, sessions: sessions}
 }
 
 // --- input types -----------------------------------------------------------
@@ -50,10 +51,23 @@ type EditTieInput struct {
 	CachedScheduledAt *time.Time
 }
 
-// --- method stubs -----------------------------------------------------------
+// --- methods -----------------------------------------------------------
 
 func (uc *campaignUsecase) List(ctx context.Context, in ListCampaignsInput, v *entities.Viewer) (dtos.Page[dtos.Campaign], error) {
-	return dtos.Page[dtos.Campaign]{}, ErrNotFound
+	params, err := validateListCampaigns(&in, v)
+	if err != nil {
+		return dtos.Page[dtos.Campaign]{}, err
+	}
+
+	items, nextCursor, err := uc.repo.List(ctx, params)
+	if err != nil {
+		return dtos.Page[dtos.Campaign]{}, mapRepoErr("list campaigns", err)
+	}
+	if items == nil {
+		items = []dtos.Campaign{}
+	}
+
+	return dtos.Page[dtos.Campaign]{Items: items, NextCursor: nextCursor}, nil
 }
 
 func (uc *campaignUsecase) GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.Campaign, error) {
@@ -61,7 +75,28 @@ func (uc *campaignUsecase) GetByID(ctx context.Context, id string, v *entities.V
 	if err != nil {
 		return nil, mapRepoErr("get campaign by id", err)
 	}
-	sessions, err := uc.repo.ListSessions(ctx, id)
+
+	// A private campaign is hidden from everyone except its master/admins and its
+	// members (active players of any session in it). An "open" session inside a
+	// private campaign is a deliberate recruiting door, but it must not expose the
+	// campaign it belongs to — hence the gate before we ever return campaign data.
+	if campaign.Availability == dtos.Private && !v.CanActAs(campaign.MasterID) {
+		if !v.IsAuthenticated() {
+			return nil, ErrNotFound
+		}
+		member, err := uc.repo.IsCampaignMember(ctx, id, v.UserID)
+		if err != nil {
+			return nil, mapRepoErr("check campaign membership", err)
+		}
+		if !member {
+			return nil, ErrNotFound
+		}
+	}
+
+	// The embedded session list is filtered at the repo (SQL) layer: private and
+	// draft sessions are dropped for viewers who aren't the master or a player of
+	// that specific session, so a public campaign never leaks its private sessions.
+	sessions, err := uc.repo.ListSessions(ctx, id, v)
 	if err != nil {
 		return nil, mapRepoErr("list sessions by campaign id", err)
 	}
@@ -86,7 +121,7 @@ func (uc *campaignUsecase) Create(ctx context.Context, in CampaignInput, v *enti
 	status := dtos.CampaignActive
 	masterId := v.UserID
 	availability := dtos.Open
-	if in.Availability != nil {
+	if in.Availability != nil && *in.Availability != "" {
 		availability = *in.Availability
 	}
 
@@ -120,8 +155,45 @@ func (uc *campaignUsecase) ListSessions(ctx context.Context, campaignID string, 
 	return nil, ErrNotFound
 }
 
-func (uc *campaignUsecase) TieSession(ctx context.Context, campaignID string, v *entities.Viewer, in TieSessionInput) error {
-	return ErrNotFound
+func (uc *campaignUsecase) TieSession(ctx context.Context, campaignID string, in TieSessionInput, v *entities.Viewer) error {
+	if !v.IsAuthenticated() {
+		return ErrForbidden
+	}
+	if in.SessionID == "" {
+		return ErrInvalidData
+	}
+
+	campaign, err := uc.repo.GetByID(ctx, campaignID)
+	if err != nil {
+		return mapRepoErr("get campaign for tie session", err)
+	}
+	if !v.CanActAs(campaign.MasterID) {
+		return ErrForbidden
+	}
+
+	session, err := uc.sessions.GetByID(ctx, in.SessionID)
+	if err != nil {
+		return mapRepoErr("get session for tie session", err)
+	}
+	if session.MasterID != campaign.MasterID {
+		return ErrForbidden
+	}
+	if session.Type == dtos.CampaignType {
+		return ErrConflict
+	}
+
+	err = uc.repo.TieSession(ctx, &infrastructure.TieSessionParams{
+		CampaignID:        campaignID,
+		SessionID:         in.SessionID,
+		OrderIndex:        in.OrderIndex,
+		BriefDescription:  in.BriefDescription,
+		CachedTitle:       &session.Title,
+		CachedScheduledAt: session.ScheduledAt,
+	})
+	if err != nil {
+		return mapRepoErr("tie session", err)
+	}
+	return nil
 }
 
 func (uc *campaignUsecase) EditTie(ctx context.Context, campaignID, sessionID string, v *entities.Viewer, in EditTieInput) error {

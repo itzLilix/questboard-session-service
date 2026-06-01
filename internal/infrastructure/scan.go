@@ -96,9 +96,40 @@ var campaignColumns = []string{
 	"c.id", "c.title", "c.description", "c.master_id", "c.status", "c.availability",
 	"c.created_at", "c.updated_at",
 	"gs.id", "gs.slug", "gs.canonical_name", "COALESCE(gs.badge_color, '')", "gs.is_curated",
+	"(SELECT COUNT(*) FROM campaign_sessions cs WHERE cs.campaign_id = c.id)",
 }
 
 func scanCampaign(row pgx.Row, c *dtos.Campaign) error {
+	// game_system fields come from a LEFT JOIN — all null when c.system_id is null
+	var (
+		description sql.NullString
+		sysID       sql.NullString
+		sysSlug     sql.NullString
+		sysName     sql.NullString
+		sysBadge    sql.NullString
+		sysCurated  sql.NullBool
+	)
+	if err := row.Scan(
+		&c.ID, &c.Title, &description, &c.MasterID, &c.Status, &c.Availability,
+		&c.CreatedAt, &c.UpdatedAt,
+		&sysID, &sysSlug, &sysName, &sysBadge, &sysCurated,
+		&c.SessionCount,
+	); err != nil {
+		return err
+	}
+	if description.Valid {
+		s := description.String
+		c.Description = &s
+	}
+	if sysID.Valid {
+		c.System = &dtos.GameSystem{
+			Id:         sysID.String,
+			Slug:       sysSlug.String,
+			Name:       sysName.String,
+			BadgeColor: sysBadge.String,
+			IsCurated:  sysCurated.Bool,
+		}
+	}
 	return nil
 }
 
@@ -109,6 +140,29 @@ var campaignSessionTieColumns = []string{
 }
 
 func scanCampaignSessionTie(row pgx.Row, t *dtos.CampaignSessionTie) error {
+	var (
+		orderIndex        int16
+		cachedScheduledAt sql.NullTime
+		briefDescription  sql.NullString
+	)
+	if err := row.Scan(
+		&t.CampaignID,
+		&t.SessionID,
+		&orderIndex,
+		&t.CachedTitle,
+		&cachedScheduledAt,
+		&briefDescription,
+	); err != nil {
+		return err
+	}
+	t.OrderIndex = int(orderIndex)
+	if cachedScheduledAt.Valid {
+		t.CachedScheduledAt = cachedScheduledAt.Time
+	}
+	if briefDescription.Valid {
+		s := briefDescription.String
+		t.BriefDescription = &s
+	}
 	return nil
 }
 

@@ -17,7 +17,7 @@ type CampaignUsecase interface {
 	ChangeStatus(ctx context.Context, id string, v *entities.Viewer, status dtos.CampaignStatus) error
 
 	ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error)
-	TieSession(ctx context.Context, campaignID string, v *entities.Viewer, in uc.TieSessionInput) error
+	TieSession(ctx context.Context, campaignID string, in uc.TieSessionInput, v *entities.Viewer) error
 	EditTie(ctx context.Context, campaignID, sessionID string, v *entities.Viewer, in uc.EditTieInput) error
 	UntieSession(ctx context.Context, campaignID, sessionID string, v *entities.Viewer) error
 
@@ -49,6 +49,7 @@ type SessionUsecase interface {
 
 	ListPlayers(ctx context.Context, sessionID string, v *entities.Viewer) (*dtos.SessionPlayersResponse, error)
 	Join(ctx context.Context, sessionID string, v *entities.Viewer) error
+	AddPlayers(ctx context.Context, sessionID string, playerIDs []string, v *entities.Viewer) error
 	Leave(ctx context.Context, sessionID string, v *entities.Viewer) error
 	Kick(ctx context.Context, sessionID string, v *entities.Viewer, playerID string) error
 	SetMyCharacter(ctx context.Context, sessionID string, v *entities.Viewer, characterID *string) error
