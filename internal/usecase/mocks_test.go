@@ -1288,74 +1288,6 @@ func (_c *MockSessionRepository_GetByID_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
-// GetCampaignRef provides a mock function for the type MockSessionRepository
-func (_mock *MockSessionRepository) GetCampaignRef(ctx context.Context, sessionID string) (*dtos.SessionCampaignRef, error) {
-	ret := _mock.Called(ctx, sessionID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetCampaignRef")
-	}
-
-	var r0 *dtos.SessionCampaignRef
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*dtos.SessionCampaignRef, error)); ok {
-		return returnFunc(ctx, sessionID)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *dtos.SessionCampaignRef); ok {
-		r0 = returnFunc(ctx, sessionID)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*dtos.SessionCampaignRef)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, sessionID)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockSessionRepository_GetCampaignRef_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetCampaignRef'
-type MockSessionRepository_GetCampaignRef_Call struct {
-	*mock.Call
-}
-
-// GetCampaignRef is a helper method to define mock.On call
-//   - ctx context.Context
-//   - sessionID string
-func (_e *MockSessionRepository_Expecter) GetCampaignRef(ctx interface{}, sessionID interface{}) *MockSessionRepository_GetCampaignRef_Call {
-	return &MockSessionRepository_GetCampaignRef_Call{Call: _e.mock.On("GetCampaignRef", ctx, sessionID)}
-}
-
-func (_c *MockSessionRepository_GetCampaignRef_Call) Run(run func(ctx context.Context, sessionID string)) *MockSessionRepository_GetCampaignRef_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockSessionRepository_GetCampaignRef_Call) Return(sessionCampaignRef *dtos.SessionCampaignRef, err error) *MockSessionRepository_GetCampaignRef_Call {
-	_c.Call.Return(sessionCampaignRef, err)
-	return _c
-}
-
-func (_c *MockSessionRepository_GetCampaignRef_Call) RunAndReturn(run func(ctx context.Context, sessionID string) (*dtos.SessionCampaignRef, error)) *MockSessionRepository_GetCampaignRef_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // GetComment provides a mock function for the type MockSessionRepository
 func (_mock *MockSessionRepository) GetComment(ctx context.Context, commentID string) (*dtos.SessionCommentary, error) {
 	ret := _mock.Called(ctx, commentID)
@@ -2033,6 +1965,74 @@ func (_c *MockSessionRepository_ListApplications_Call) Return(sessionApplication
 }
 
 func (_c *MockSessionRepository_ListApplications_Call) RunAndReturn(run func(ctx context.Context, sessionID string) ([]dtos.SessionApplication, error)) *MockSessionRepository_ListApplications_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListCampaignRefs provides a mock function for the type MockSessionRepository
+func (_mock *MockSessionRepository) ListCampaignRefs(ctx context.Context, sessionIDs []string) (map[string]dtos.SessionCampaignRef, error) {
+	ret := _mock.Called(ctx, sessionIDs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListCampaignRefs")
+	}
+
+	var r0 map[string]dtos.SessionCampaignRef
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []string) (map[string]dtos.SessionCampaignRef, error)); ok {
+		return returnFunc(ctx, sessionIDs)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []string) map[string]dtos.SessionCampaignRef); ok {
+		r0 = returnFunc(ctx, sessionIDs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]dtos.SessionCampaignRef)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, []string) error); ok {
+		r1 = returnFunc(ctx, sessionIDs)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockSessionRepository_ListCampaignRefs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListCampaignRefs'
+type MockSessionRepository_ListCampaignRefs_Call struct {
+	*mock.Call
+}
+
+// ListCampaignRefs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionIDs []string
+func (_e *MockSessionRepository_Expecter) ListCampaignRefs(ctx interface{}, sessionIDs interface{}) *MockSessionRepository_ListCampaignRefs_Call {
+	return &MockSessionRepository_ListCampaignRefs_Call{Call: _e.mock.On("ListCampaignRefs", ctx, sessionIDs)}
+}
+
+func (_c *MockSessionRepository_ListCampaignRefs_Call) Run(run func(ctx context.Context, sessionIDs []string)) *MockSessionRepository_ListCampaignRefs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []string
+		if args[1] != nil {
+			arg1 = args[1].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSessionRepository_ListCampaignRefs_Call) Return(stringToSessionCampaignRef map[string]dtos.SessionCampaignRef, err error) *MockSessionRepository_ListCampaignRefs_Call {
+	_c.Call.Return(stringToSessionCampaignRef, err)
+	return _c
+}
+
+func (_c *MockSessionRepository_ListCampaignRefs_Call) RunAndReturn(run func(ctx context.Context, sessionIDs []string) (map[string]dtos.SessionCampaignRef, error)) *MockSessionRepository_ListCampaignRefs_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -3075,12 +3075,12 @@ func (_c *MockCampaignRepository_ListPlayers_Call) RunAndReturn(run func(ctx con
 	return _c
 }
 
-// ListSessions provides a mock function for the type MockCampaignRepository
-func (_mock *MockCampaignRepository) ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error) {
+// ListSessionTies provides a mock function for the type MockCampaignRepository
+func (_mock *MockCampaignRepository) ListSessionTies(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error) {
 	ret := _mock.Called(ctx, campaignID, v)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ListSessions")
+		panic("no return value specified for ListSessionTies")
 	}
 
 	var r0 []dtos.CampaignSessionTie
@@ -3093,6 +3093,80 @@ func (_mock *MockCampaignRepository) ListSessions(ctx context.Context, campaignI
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]dtos.CampaignSessionTie)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, *entities.Viewer) error); ok {
+		r1 = returnFunc(ctx, campaignID, v)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockCampaignRepository_ListSessionTies_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListSessionTies'
+type MockCampaignRepository_ListSessionTies_Call struct {
+	*mock.Call
+}
+
+// ListSessionTies is a helper method to define mock.On call
+//   - ctx context.Context
+//   - campaignID string
+//   - v *entities.Viewer
+func (_e *MockCampaignRepository_Expecter) ListSessionTies(ctx interface{}, campaignID interface{}, v interface{}) *MockCampaignRepository_ListSessionTies_Call {
+	return &MockCampaignRepository_ListSessionTies_Call{Call: _e.mock.On("ListSessionTies", ctx, campaignID, v)}
+}
+
+func (_c *MockCampaignRepository_ListSessionTies_Call) Run(run func(ctx context.Context, campaignID string, v *entities.Viewer)) *MockCampaignRepository_ListSessionTies_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 *entities.Viewer
+		if args[2] != nil {
+			arg2 = args[2].(*entities.Viewer)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCampaignRepository_ListSessionTies_Call) Return(campaignSessionTies []dtos.CampaignSessionTie, err error) *MockCampaignRepository_ListSessionTies_Call {
+	_c.Call.Return(campaignSessionTies, err)
+	return _c
+}
+
+func (_c *MockCampaignRepository_ListSessionTies_Call) RunAndReturn(run func(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error)) *MockCampaignRepository_ListSessionTies_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListSessions provides a mock function for the type MockCampaignRepository
+func (_mock *MockCampaignRepository) ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.Session, error) {
+	ret := _mock.Called(ctx, campaignID, v)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListSessions")
+	}
+
+	var r0 []dtos.Session
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, *entities.Viewer) ([]dtos.Session, error)); ok {
+		return returnFunc(ctx, campaignID, v)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, *entities.Viewer) []dtos.Session); ok {
+		r0 = returnFunc(ctx, campaignID, v)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]dtos.Session)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string, *entities.Viewer) error); ok {
@@ -3139,12 +3213,12 @@ func (_c *MockCampaignRepository_ListSessions_Call) Run(run func(ctx context.Con
 	return _c
 }
 
-func (_c *MockCampaignRepository_ListSessions_Call) Return(campaignSessionTies []dtos.CampaignSessionTie, err error) *MockCampaignRepository_ListSessions_Call {
-	_c.Call.Return(campaignSessionTies, err)
+func (_c *MockCampaignRepository_ListSessions_Call) Return(sessions []dtos.Session, err error) *MockCampaignRepository_ListSessions_Call {
+	_c.Call.Return(sessions, err)
 	return _c
 }
 
-func (_c *MockCampaignRepository_ListSessions_Call) RunAndReturn(run func(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error)) *MockCampaignRepository_ListSessions_Call {
+func (_c *MockCampaignRepository_ListSessions_Call) RunAndReturn(run func(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.Session, error)) *MockCampaignRepository_ListSessions_Call {
 	_c.Call.Return(run)
 	return _c
 }

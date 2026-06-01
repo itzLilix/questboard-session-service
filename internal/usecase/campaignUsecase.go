@@ -96,11 +96,11 @@ func (uc *campaignUsecase) GetByID(ctx context.Context, id string, v *entities.V
 	// The embedded session list is filtered at the repo (SQL) layer: private and
 	// draft sessions are dropped for viewers who aren't the master or a player of
 	// that specific session, so a public campaign never leaks its private sessions.
-	sessions, err := uc.repo.ListSessions(ctx, id, v)
+	ties, err := uc.repo.ListSessionTies(ctx, id, v)
 	if err != nil {
-		return nil, mapRepoErr("list sessions by campaign id", err)
+		return nil, mapRepoErr("list session ties by campaign id", err)
 	}
-	campaign.Sessions = sessions
+	campaign.Sessions = ties
 
 	return campaign, nil
 }
@@ -151,8 +151,35 @@ func (uc *campaignUsecase) ChangeStatus(ctx context.Context, id string, v *entit
 	return ErrNotFound
 }
 
-func (uc *campaignUsecase) ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error) {
-	return nil, ErrNotFound
+// ListSessions returns a campaign's sessions as full session cards (the profile
+// accordion's lazy expand). It gates on campaign visibility exactly like GetByID
+// — a private campaign's sessions are not enumerable by anyone but its
+// master/admins and its members — and then leans on the repo's per-session SQL
+// filter for the rest.
+func (uc *campaignUsecase) ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.Session, error) {
+	campaign, err := uc.repo.GetByID(ctx, campaignID)
+	if err != nil {
+		return nil, mapRepoErr("get campaign for list sessions", err)
+	}
+
+	if campaign.Availability == dtos.Private && !v.CanActAs(campaign.MasterID) {
+		if !v.IsAuthenticated() {
+			return nil, ErrNotFound
+		}
+		member, err := uc.repo.IsCampaignMember(ctx, campaignID, v.UserID)
+		if err != nil {
+			return nil, mapRepoErr("check campaign membership", err)
+		}
+		if !member {
+			return nil, ErrNotFound
+		}
+	}
+
+	sessions, err := uc.repo.ListSessions(ctx, campaignID, v)
+	if err != nil {
+		return nil, mapRepoErr("list campaign sessions", err)
+	}
+	return sessions, nil
 }
 
 func (uc *campaignUsecase) TieSession(ctx context.Context, campaignID string, in TieSessionInput, v *entities.Viewer) error {

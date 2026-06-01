@@ -91,7 +91,11 @@ func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput, v *ent
 		return dtos.SessionListResponse{}, err
 	}
 	if len(params.Status) == 0 {
-		return dtos.SessionListResponse{Items: []dtos.Session{}, Users: map[string]dtos.UserBrief{}}, nil
+		return dtos.SessionListResponse{
+			Items:     []dtos.Session{},
+			Users:     map[string]dtos.UserBrief{},
+			Campaigns: map[string]dtos.SessionCampaignRef{},
+		}, nil
 	}
 
 	items, nextCursor, err := uc.repo.List(ctx, params, v)
@@ -100,12 +104,19 @@ func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput, v *ent
 	}
 
 	masterIDs := make([]string, 0, len(items))
+	sessionIDs := make([]string, 0, len(items))
 	for _, s := range items {
 		masterIDs = append(masterIDs, s.MasterID)
+		sessionIDs = append(sessionIDs, s.Id)
 	}
 	users := uc.enrich(ctx, masterIDs)
 
-	return dtos.SessionListResponse{Items: items, NextCursor: nextCursor, Users: users}, nil
+	campaigns, err := uc.repo.ListCampaignRefs(ctx, sessionIDs)
+	if err != nil {
+		return dtos.SessionListResponse{}, mapRepoErr("list campaign refs for list sessions", err)
+	}
+
+	return dtos.SessionListResponse{Items: items, NextCursor: nextCursor, Users: users, Campaigns: campaigns}, nil
 }
 
 func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.SessionResponse, error) {
@@ -144,9 +155,12 @@ func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Vi
 
 	var campaignRef *dtos.SessionCampaignRef
 	if s.Type == dtos.CampaignType {
-		campaignRef, err = uc.repo.GetCampaignRef(ctx, id)
+		refs, err := uc.repo.ListCampaignRefs(ctx, []string{id})
 		if err != nil {
 			return nil, mapRepoErr("get campaign ref for get session by id", err)
+		}
+		if ref, ok := refs[id]; ok {
+			campaignRef = &ref
 		}
 	}
 

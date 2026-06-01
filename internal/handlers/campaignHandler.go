@@ -229,12 +229,21 @@ func (h *campaignHandler) changeStatus(c fiber.Ctx) error {
 // @Tags         campaigns
 // @Produce      json
 // @Param        id   path     string  true  "Campaign ID"
-// @Success      200  {array}  dtos.CampaignSessionTie
+// @Success      200  {array}  dtos.Session
 // @Failure      403  {object} ErrorResponse
 // @Failure      404  {object} ErrorResponse
 // @Router       /v1/campaigns/{id}/sessions [get]
 func (h *campaignHandler) listSessions(c fiber.Ctx) error {
-	return c.SendStatus(fiber.StatusNotImplemented)
+	id := c.Params("id")
+	sessions, err := h.uc.ListSessions(c.Context(), id, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		h.log.Error().Err(err).Str("campaignId", id).Msg("list campaign sessions failed")
+		return handleErr(c, err)
+	}
+	if sessions == nil {
+		sessions = []dtos.Session{}
+	}
+	return c.Status(fiber.StatusOK).JSON(sessions)
 }
 
 // @Summary      Tie a session to a campaign

@@ -273,16 +273,75 @@ func (r *campaignRepository) UpdateStatus(ctx context.Context, id string, status
 	return nil
 }
 
-// ListSessions returns the campaign's session ties, with per-session visibility
+// ListSessionTies returns the campaign's session ties (the denormalized cache:
+// cached_title/cached_scheduled_at/order_index), with per-session visibility
 // applied in SQL: private and draft sessions are hidden from viewers who are
 // neither the master nor an active player of that specific session. Admins see
-// everything. This keeps private session data (e.g. cached_title) inside the DB
-// instead of shipping it across the layer boundary just to drop it later.
-func (r *campaignRepository) ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error) {
+// everything. This is the cheap shape used by the campaign detail view
+// (GetByID) — it avoids reading full session rows. For full session cards
+// (address, seats), use ListSessions.
+func (r *campaignRepository) ListSessionTies(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error) {
 	q := r.psql.
 		Select(campaignSessionTieColumns...).
 		From("campaign_sessions cs").
 		Join("sessions s ON s.id = cs.session_id").
+		Where(sq.Eq{"cs.campaign_id": campaignID})
+
+	if !v.IsAdmin() {
+		visibility := sq.Or{
+			sq.And{
+				sq.Expr("s.status NOT IN (?, ?)", dtos.Draft, dtos.Cancelled),
+				sq.NotEq{"s.availability": dtos.Private},
+			},
+		}
+		if v.IsAuthenticated() {
+			visibility = append(visibility, sq.Eq{"s.master_id": v.UserID})
+			visibility = append(visibility, sq.Expr(
+				"EXISTS (SELECT 1 FROM session_players sp WHERE sp.session_id = s.id AND sp.player_id = ? AND sp.status = ?)",
+				v.UserID, dtos.PlayerActive,
+			))
+		}
+		q = q.Where(visibility)
+	}
+
+	selectSQL, selectArgs, err := q.OrderBy("cs.order_index ASC").ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build list campaign session ties: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, selectSQL, selectArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("query campaign session ties: %w", err)
+	}
+	defer rows.Close()
+
+	ties := make([]dtos.CampaignSessionTie, 0)
+	for rows.Next() {
+		var t dtos.CampaignSessionTie
+		if err := scanCampaignSessionTie(rows, &t); err != nil {
+			return nil, fmt.Errorf("scan campaign session tie: %w", err)
+		}
+		ties = append(ties, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate campaign session ties: %w", err)
+	}
+	return ties, nil
+}
+
+// ListSessions returns the campaign's sessions as full session cards (address,
+// seats, embedded game system), ordered by the campaign's order_index. It joins
+// the real session rows rather than the cache, so it carries the per-session
+// fields the profile's campaign accordion needs on expand. Visibility matches
+// ListSessionTies: private/draft sessions are hidden from viewers who are
+// neither the master nor an active player of that specific session; admins see
+// everything.
+func (r *campaignRepository) ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.Session, error) {
+	q := r.psql.
+		Select(sessionColumns...).
+		From("sessions s").
+		Join("game_systems gs ON gs.id = s.system_id").
+		Join("campaign_sessions cs ON cs.session_id = s.id").
 		Where(sq.Eq{"cs.campaign_id": campaignID})
 
 	if !v.IsAdmin() {
@@ -313,18 +372,18 @@ func (r *campaignRepository) ListSessions(ctx context.Context, campaignID string
 	}
 	defer rows.Close()
 
-	ties := make([]dtos.CampaignSessionTie, 0)
+	sessions := make([]dtos.Session, 0)
 	for rows.Next() {
-		var t dtos.CampaignSessionTie
-		if err := scanCampaignSessionTie(rows, &t); err != nil {
-			return nil, fmt.Errorf("scan campaign session tie: %w", err)
+		var s dtos.Session
+		if err := scanSession(rows, &s); err != nil {
+			return nil, fmt.Errorf("scan campaign session: %w", err)
 		}
-		ties = append(ties, t)
+		sessions = append(sessions, s)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate campaign sessions: %w", err)
 	}
-	return ties, nil
+	return sessions, nil
 }
 
 // IsCampaignMember reports whether userID is an active player of any session

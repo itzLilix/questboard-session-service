@@ -188,6 +188,9 @@ func (h *sessionHandler) list(c fiber.Ctx) error {
 	if resp.Users == nil {
 		resp.Users = map[string]dtos.UserBrief{}
 	}
+	if resp.Campaigns == nil {
+		resp.Campaigns = map[string]dtos.SessionCampaignRef{}
+	}
 	return c.Status(fiber.StatusOK).JSON(resp)
 }
 

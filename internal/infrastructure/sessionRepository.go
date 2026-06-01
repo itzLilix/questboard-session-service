@@ -280,32 +280,48 @@ func (r *sessionRepository) GetByID(ctx context.Context, id string) (*dtos.Sessi
 	return s, nil
 }
 
-// GetCampaignRef returns the campaign tie for a session (campaign id + order
-// index within the campaign), or nil when the session is a standalone oneshot.
-// A session belongs to at most one campaign (UNIQUE on campaign_sessions.session_id).
-func (r *sessionRepository) GetCampaignRef(ctx context.Context, sessionID string) (*dtos.SessionCampaignRef, error) {
-	query, args, err := r.psql.
-		Select("cs.campaign_id", "cs.order_index, c.title").
-		From("campaign_sessions cs").
-		Join("campaigns c ON c.id = cs.campaign_id").
-		Where(sq.Eq{"cs.session_id": sessionID}).
-		ToSql()
-	if err != nil {
-		return nil, fmt.Errorf("build get campaign ref query: %w", err)
+// ListCampaignRefs returns the campaign tie (campaign id + title + order index
+// within the campaign) for each of the given sessions, keyed by session id.
+// Standalone oneshots are simply absent from the map. A session belongs to at
+// most one campaign (UNIQUE on campaign_sessions.session_id).
+func (r *sessionRepository) ListCampaignRefs(ctx context.Context, sessionIDs []string) (map[string]dtos.SessionCampaignRef, error) {
+	refs := make(map[string]dtos.SessionCampaignRef, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return refs, nil
 	}
 
-	var (
-		ref        dtos.SessionCampaignRef
-		orderIndex int16
-	)
-	if err := r.db.QueryRow(ctx, query, args...).Scan(&ref.CampaignID, &orderIndex, &ref.Title); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("scan campaign ref: %w", err)
+	query, args, err := r.psql.
+		Select("cs.session_id", "cs.campaign_id", "c.title", "cs.order_index").
+		From("campaign_sessions cs").
+		Join("campaigns c ON c.id = cs.campaign_id").
+		Where(sq.Eq{"cs.session_id": sessionIDs}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build list campaign refs query: %w", err)
 	}
-	ref.Index = int(orderIndex)
-	return &ref, nil
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query campaign refs: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			sessionID  string
+			ref        dtos.SessionCampaignRef
+			orderIndex int16
+		)
+		if err := rows.Scan(&sessionID, &ref.CampaignID, &ref.Title, &orderIndex); err != nil {
+			return nil, fmt.Errorf("scan campaign ref: %w", err)
+		}
+		ref.Index = int(orderIndex)
+		refs[sessionID] = ref
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate campaign refs: %w", err)
+	}
+	return refs, nil
 }
 
 func (r *sessionRepository) Create(ctx context.Context, p *CreateSessionParams) (*dtos.Session, error) {

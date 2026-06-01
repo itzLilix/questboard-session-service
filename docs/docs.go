@@ -56,6 +56,11 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "created_at",
+                            "title",
+                            "status"
+                        ],
                         "type": "string",
                         "description": "Sort field",
                         "name": "sort",
@@ -100,6 +105,12 @@ const docTemplate = `{
                                     "type": "string"
                                 }
                             }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.ErrorResponse"
                         }
                     },
                     "500": {
@@ -400,7 +411,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/dtos.CampaignSessionTie"
+                                "$ref": "#/definitions/dtos.Session"
                             }
                         }
                     },
@@ -2213,6 +2224,70 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "tags": [
+                    "sessions"
+                ],
+                "summary": "Master adds players",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Session ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Players' IDs",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.AddPlayersRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/v1/sessions/{id}/players/me": {
@@ -2404,6 +2479,9 @@ const docTemplate = `{
                 "masterId": {
                     "type": "string"
                 },
+                "sessionCount": {
+                    "type": "integer"
+                },
                 "sessions": {
                     "type": "array",
                     "items": {
@@ -2434,9 +2512,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "cachedTitle": {
-                    "type": "string"
-                },
-                "campaignId": {
                     "type": "string"
                 },
                 "orderIndex": {
@@ -2664,6 +2739,20 @@ const docTemplate = `{
                 "Private"
             ]
         },
+        "dtos.SessionCampaignRef": {
+            "type": "object",
+            "properties": {
+                "campaignId": {
+                    "type": "string"
+                },
+                "index": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
         "dtos.SessionCardData": {
             "type": "object",
             "properties": {
@@ -2747,6 +2836,12 @@ const docTemplate = `{
         "dtos.SessionListResponse": {
             "type": "object",
             "properties": {
+                "campaigns": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/dtos.SessionCampaignRef"
+                    }
+                },
                 "items": {
                     "type": "array",
                     "items": {
@@ -2817,6 +2912,9 @@ const docTemplate = `{
         "dtos.SessionResponse": {
             "type": "object",
             "properties": {
+                "campaign": {
+                    "$ref": "#/definitions/dtos.SessionCampaignRef"
+                },
                 "players": {
                     "type": "array",
                     "items": {
@@ -2908,6 +3006,17 @@ const docTemplate = `{
                 },
                 "username": {
                     "type": "string"
+                }
+            }
+        },
+        "internal_handlers.AddPlayersRequest": {
+            "type": "object",
+            "properties": {
+                "playerIds": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -3013,6 +3122,9 @@ const docTemplate = `{
         "internal_handlers.EditCampaignRequest": {
             "type": "object",
             "properties": {
+                "availability": {
+                    "$ref": "#/definitions/dtos.SessionAvailability"
+                },
                 "description": {
                     "type": "string"
                 },

@@ -16,7 +16,7 @@ type CampaignUsecase interface {
 	Delete(ctx context.Context, id string, v *entities.Viewer) error
 	ChangeStatus(ctx context.Context, id string, v *entities.Viewer, status dtos.CampaignStatus) error
 
-	ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error)
+	ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.Session, error)
 	TieSession(ctx context.Context, campaignID string, in uc.TieSessionInput, v *entities.Viewer) error
 	EditTie(ctx context.Context, campaignID, sessionID string, v *entities.Viewer, in uc.EditTieInput) error
 	UntieSession(ctx context.Context, campaignID, sessionID string, v *entities.Viewer) error

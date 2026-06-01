@@ -72,6 +72,11 @@ func stubEnrich(d sessionDeps) {
 		Return(map[string]dtos.UserBrief{}, nil).Maybe()
 }
 
+func stubCampaignRefs(d sessionDeps) {
+	d.repo.EXPECT().ListCampaignRefs(mock.Anything, mock.Anything).
+		Return(map[string]dtos.SessionCampaignRef{}, nil).Maybe()
+}
+
 // ---------------------------------------------------------------------------
 // List
 // ---------------------------------------------------------------------------
@@ -79,6 +84,7 @@ func stubEnrich(d sessionDeps) {
 func TestSession_List_Success(t *testing.T) {
 	uc, d := newSessionUC(t)
 	stubEnrich(d)
+	stubCampaignRefs(d)
 
 	items := []dtos.Session{*publishedSession("master-1")}
 	d.repo.EXPECT().List(mock.Anything, mock.Anything, mock.Anything).

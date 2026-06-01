@@ -27,7 +27,7 @@ type SessionRepository interface {
 	// sessions
 	List(ctx context.Context, p infrastructure.ListSessionsParams, v *entities.Viewer) ([]dtos.Session, string, error)
 	GetByID(ctx context.Context, id string) (*dtos.Session, error)
-	GetCampaignRef(ctx context.Context, sessionID string) (*dtos.SessionCampaignRef, error)
+	ListCampaignRefs(ctx context.Context, sessionIDs []string) (map[string]dtos.SessionCampaignRef, error)
 	Create(ctx context.Context, p *infrastructure.CreateSessionParams) (*dtos.Session, error)
 	Update(ctx context.Context, id string, p *infrastructure.UpdateSessionParams) (*dtos.Session, error)
 	Delete(ctx context.Context, id string) error
@@ -76,7 +76,8 @@ type CampaignRepository interface {
 	Delete(ctx context.Context, id string) error
 	UpdateStatus(ctx context.Context, id string, status dtos.CampaignStatus) error
 
-	ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error)
+	ListSessionTies(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error)
+	ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.Session, error)
 	TieSession(ctx context.Context, p *infrastructure.TieSessionParams) error
 	EditTie(ctx context.Context, p *infrastructure.EditTieParams) error
 	UntieSession(ctx context.Context, campaignID, sessionID string) error
