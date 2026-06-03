@@ -94,7 +94,7 @@ func (r *gameSystemsRepository) Search(ctx context.Context, q string) ([]dtos.Ga
 		Select(gameSystemColumns...).
 		From("game_systems gs").
 		LeftJoin("sessions s ON s.system_id = gs.id").
-		Where("gs.canonical_name ILIKE ? OR gs.slug ILIKE ?", "%"+q+"%", "%"+q+"%").
+		Where("gs.canonical_name ILIKE ? OR gs.slug ILIKE ? OR ? <% gs.canonical_name", "%"+q+"%", "%"+q+"%", q).
 		GroupBy("gs.id").
 		OrderBy("COUNT(s.id) DESC", "gs.canonical_name ASC").
 		Limit(20).

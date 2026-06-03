@@ -35,7 +35,7 @@ func resolveErr(err error) (int, string, string) {
 		return fiber.StatusBadRequest, "INVALID_FILE_TYPE", "Unsupported file type"
 	case errors.Is(err, usecase.ErrInvalidCursor):
 		return fiber.StatusBadRequest, "INVALID_CURSOR", "Invalid pagination cursor"
-	case errors.Is(err, ErrUnauthorized):
+	case errors.Is(err, ErrUnauthorized), errors.Is(err, usecase.ErrUnauthorized):
 		return fiber.StatusUnauthorized, "UNAUTHORIZED", "Authentication required"
 	case errors.Is(err, usecase.ErrSystemAlreadyExists):
 		return fiber.StatusConflict, "CONFLICT", "Game system already exists"

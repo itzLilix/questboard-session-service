@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/itzLilix/questboard-session-service/internal/entities"
 	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
@@ -14,11 +15,11 @@ func validateSession(in *SessionInput) error {
 	if in.Title != nil {
 		trimmed := strings.TrimSpace(*in.Title)
 		in.Title = &trimmed
-		if len(*in.Title) == 0 || len(*in.Title) > 100 {
+		if utf8.RuneCountInString(*in.Title) == 0 || utf8.RuneCountInString(*in.Title) > 100 {
 			return fmt.Errorf("%w: title must be 1-100 characters", ErrInvalidData)
 		}
 	}
-	if in.Description != nil && len(*in.Description) > 2000 {
+	if in.Description != nil && utf8.RuneCountInString(*in.Description) > 2000 {
 		return fmt.Errorf("%w: description must be <= 2000 characters", ErrInvalidData)
 	}
 	if in.MaxSeats != nil{
@@ -53,13 +54,13 @@ func validateSession(in *SessionInput) error {
 			return fmt.Errorf("%w: invalid availability", ErrInvalidData)
 		}
 	}
-	if in.Address != nil && len(*in.Address) > 400 {
+	if in.Address != nil && utf8.RuneCountInString(*in.Address) > 400 {
 		return fmt.Errorf("%w: address must be <= 400 characters", ErrInvalidData)
 	}
 	if in.Lng != nil && (*in.Lng < -180 || *in.Lng > 180) {
 		return fmt.Errorf("%w: longitude must be <= +-180", ErrInvalidData)
 	}
-	if in.Lat != nil && (*in.Lng < -90 || *in.Lng > 90) {
+	if in.Lat != nil && (*in.Lat < -90 || *in.Lat > 90) {
 		return fmt.Errorf("%w: latitude must be <= +-90", ErrInvalidData)
 	}
 	if in.ScheduledAt != nil && in.ScheduledAt.After(time.Now().AddDate(10, 0, 0)) {
@@ -88,7 +89,7 @@ func validateListSessions(in *ListSessionsInput, v *entities.Viewer) (infrastruc
 			targetIsViewer = v.Is(masterID)
 		} else {
 			if !v.IsAuthenticated() {
-				return infrastructure.ListSessionsParams{}, ErrForbidden
+				return infrastructure.ListSessionsParams{}, ErrUnauthorized
 			}
 			masterID = v.UserID
 			targetIsViewer = true
@@ -99,7 +100,7 @@ func validateListSessions(in *ListSessionsInput, v *entities.Viewer) (infrastruc
 			targetIsViewer = v.Is(playerID)
 		} else {
 			if !v.IsAuthenticated() {
-				return infrastructure.ListSessionsParams{}, ErrForbidden
+				return infrastructure.ListSessionsParams{}, ErrUnauthorized
 			}
 			playerID = v.UserID
 			targetIsViewer = true
@@ -313,12 +314,12 @@ func validateCampaign(in *CampaignInput, v *entities.Viewer) error {
 	if in.Title != nil {
 		trimmed := strings.TrimSpace(*in.Title)
 		in.Title = &trimmed
-		if len(*in.Title) == 0 || len(*in.Title) > 100 {
+		if len(*in.Title) == 0 || utf8.RuneCountInString(*in.Title) > 100 {
 			return fmt.Errorf("%w: title must be 1-100 characters", ErrInvalidData)
 		}
 	}
 
-	if in.Description != nil && len(*in.Description) > 2000 {
+	if in.Description != nil && utf8.RuneCountInString(*in.Description) > 2000 {
 		return fmt.Errorf("%w: description must be <= 2000 characters", ErrInvalidData)
 	}
 
@@ -330,5 +331,12 @@ func validateCampaign(in *CampaignInput, v *entities.Viewer) error {
 		}
 	}
 
+	return nil
+}
+
+func validateEditTie(in *EditTieInput) error {
+	if in.BriefDescription != nil && utf8.RuneCountInString(*in.BriefDescription) > 1000 {
+		return fmt.Errorf("%w: brief description must be <= 1000 characters", ErrInvalidData)
+	}
 	return nil
 }

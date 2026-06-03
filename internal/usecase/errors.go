@@ -19,6 +19,7 @@ var (
 	ErrConflict        = errors.New("conflict")
 	ErrSeatUnavailable = errors.New("no free seats")
 	ErrInvalidStatus   = errors.New("invalid status")
+	ErrUnauthorized   = errors.New("unauthorized")
 
 	ErrFileTooLarge = errors.New("file too large")
 	ErrInvalidFileType = errors.New("invalid file type")
@@ -33,6 +34,9 @@ func mapRepoErr(op string, err error) error {
 	}
 	if errors.Is(err, infrastructure.ErrNotFound) {
 		return ErrNotFound
+	}
+	if errors.Is(err, infrastructure.ErrInvalidData) {
+		return ErrInvalidData
 	}
 	if errors.Is(err, cursor.ErrInvalidCursor) {
 		return fmt.Errorf("%s: %w: invalid cursor", op, ErrInvalidCursor)

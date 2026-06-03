@@ -59,10 +59,7 @@ type TieSessionParams struct {
 type EditTieParams struct {
 	CampaignID        string
 	SessionID         string
-	OrderIndex        *int
 	BriefDescription  *string
-	CachedTitle       *string
-	CachedScheduledAt *time.Time
 }
 
 func NewCampaignRepository(db *pgxpool.Pool, psql sq.StatementBuilderType) *campaignRepository {
@@ -118,7 +115,7 @@ func (r *campaignRepository) List(ctx context.Context, p ListCampaignsParams) ([
 
 	// --- filters ---
 	if p.Search != "" {
-		q = q.Where("c.title ILIKE ?", "%"+p.Search+"%")
+		q = q.Where("(c.title ILIKE ? OR ? <% c.title)", "%"+p.Search+"%", p.Search)
 	}
 	if p.MasterID != "" {
 		q = q.Where(sq.Eq{"c.master_id": p.MasterID})
@@ -458,11 +455,139 @@ func (r *campaignRepository) TieSession(ctx context.Context, p *TieSessionParams
 	return nil
 }
 
-func (r *campaignRepository) EditTie(ctx context.Context, p *EditTieParams) error {
+// EditTie updates a tie's brief_description and returns the refreshed tie. Every
+// tie column lives on campaign_sessions, so an UPDATE ... RETURNING is enough —
+// no JOIN to sessions is needed. A missing tie surfaces as ErrNotFound.
+func (r *campaignRepository) EditTie(ctx context.Context, p *EditTieParams) (*dtos.CampaignSessionTie, error) {
+	var briefArg any
+	if p.BriefDescription != nil {
+		briefArg = nullString(*p.BriefDescription)
+	}
+
+	updateSQL, args, err := r.psql.
+		Update("campaign_sessions").
+		Set("brief_description", briefArg).
+		Where(sq.Eq{"campaign_id": p.CampaignID, "session_id": p.SessionID}).
+		Suffix("RETURNING campaign_id, session_id, order_index, COALESCE(cached_title, ''), cached_scheduled_at, brief_description").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build edit tie: %w", err)
+	}
+
+	var tie dtos.CampaignSessionTie
+	if err := scanCampaignSessionTie(r.db.QueryRow(ctx, updateSQL, args...), &tie); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("edit tie: %w", err)
+	}
+	return &tie, nil
+}
+
+// UntieSession removes a session from a campaign. The trg_session_type trigger
+// flips sessions.type back to oneshot on DELETE, so we never touch type here.
+// Deleting a tie that isn't there surfaces as ErrNotFound.
+func (r *campaignRepository) UntieSession(ctx context.Context, campaignID, sessionID string) error {
+	deleteSQL, args, err := r.psql.
+		Delete("campaign_sessions").
+		Where(sq.Eq{"campaign_id": campaignID, "session_id": sessionID}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build untie session: %w", err)
+	}
+
+	cmdTag, err := r.db.Exec(ctx, deleteSQL, args...)
+	if err != nil {
+		return fmt.Errorf("untie session: %w", err)
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
 	return nil
 }
 
-func (r *campaignRepository) UntieSession(ctx context.Context, campaignID, sessionID string) error {
+// ReorderSessions rewrites the campaign's tie ordering to the given sequence,
+// assigning order_index 1..N. The input must be a strict permutation of the
+// campaign's current tie set (same members, no duplicates, no strangers) —
+// anything else is ErrInvalidData. Because (campaign_id, order_index) is UNIQUE,
+// the rewrite would trip the constraint mid-flight on any non-trivial reshuffle;
+// we defer the check to COMMIT (constraint is DEFERRABLE INITIALLY IMMEDIATE) so
+// uniqueness is validated once, against the final state.
+func (r *campaignRepository) ReorderSessions(ctx context.Context, campaignID string, orderedSessionIDs []string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin reorder sessions: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Lock + read the campaign's current tie set so a concurrent tie/untie can't
+	// race the permutation check.
+	selectSQL, selectArgs, err := r.psql.
+		Select("session_id").
+		From("campaign_sessions").
+		Where(sq.Eq{"campaign_id": campaignID}).
+		Suffix("FOR UPDATE").
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build lock campaign ties: %w", err)
+	}
+
+	rows, err := tx.Query(ctx, selectSQL, selectArgs...)
+	if err != nil {
+		return fmt.Errorf("lock campaign ties: %w", err)
+	}
+	current := make(map[string]struct{})
+	for rows.Next() {
+		var sid string
+		if err := rows.Scan(&sid); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan campaign tie id: %w", err)
+		}
+		current[sid] = struct{}{}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate campaign tie ids: %w", err)
+	}
+
+	// Strict full-permutation validation: same cardinality, every input ID belongs
+	// to the campaign, and no duplicates.
+	if len(orderedSessionIDs) != len(current) {
+		return ErrInvalidData
+	}
+	seen := make(map[string]struct{}, len(orderedSessionIDs))
+	for _, sid := range orderedSessionIDs {
+		if _, ok := current[sid]; !ok {
+			return ErrInvalidData
+		}
+		if _, dup := seen[sid]; dup {
+			return ErrInvalidData
+		}
+		seen[sid] = struct{}{}
+	}
+
+	// Opt this transaction into deferred uniqueness so transient order_index
+	// collisions during the rewrite don't fail row-by-row.
+	if _, err := tx.Exec(ctx, "SET CONSTRAINTS ALL DEFERRED"); err != nil {
+		return fmt.Errorf("defer constraints: %w", err)
+	}
+
+	for i, sid := range orderedSessionIDs {
+		if _, err := tx.Exec(ctx,
+			"UPDATE campaign_sessions SET order_index = $1 WHERE campaign_id = $2 AND session_id = $3",
+			i+1, campaignID, sid,
+		); err != nil {
+			return fmt.Errorf("reorder session %s: %w", sid, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrAlreadyExists
+		}
+		return fmt.Errorf("commit reorder sessions: %w", err)
+	}
 	return nil
 }
 

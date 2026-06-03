@@ -63,7 +63,6 @@ type TieSessionRequest struct {
 }
 
 type EditTieRequest struct {
-	OrderIndex       *int    `json:"orderIndex,omitempty"`
 	BriefDescription *string `json:"briefDescription,omitempty"`
 }
 
@@ -81,6 +80,7 @@ func (h *campaignHandler) RegisterRoutes(app fiber.Router) {
 	c.Post("/:id/sessions", h.rbac.Protected(), h.tieSession)
 	c.Delete("/:id/sessions/:sessionId", h.rbac.Protected(), h.untieSession)
 	c.Patch("/:id/sessions/:sessionId", h.rbac.Protected(), h.editTie)
+	c.Put("/:id/sessions/order", h.rbac.Protected(), h.reorderSessions)
 
 	c.Get("/:id/players", h.rbac.Optional(), h.listPlayers)
 }
@@ -286,7 +286,13 @@ func (h *campaignHandler) tieSession(c fiber.Ctx) error {
 // @Security     CookieAuth
 // @Router       /v1/campaigns/{id}/sessions/{sessionId} [delete]
 func (h *campaignHandler) untieSession(c fiber.Ctx) error {
-	return c.SendStatus(fiber.StatusNotImplemented)
+	campaignId := c.Params("id")
+	sessionId := c.Params("sessionId")
+
+	if err := h.uc.UntieSession(c.Context(), campaignId, sessionId, entities.BuildViewerFromCtx(c)); err != nil {
+		return handleErr(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // @Summary      Update campaign-session tie metadata
@@ -295,7 +301,7 @@ func (h *campaignHandler) untieSession(c fiber.Ctx) error {
 // @Param        id         path  string          true  "Campaign ID"
 // @Param        sessionId  path  string          true  "Session ID"
 // @Param        body       body  EditTieRequest  true  "Tie metadata"
-// @Success      204
+// @Success      200  {object} dtos.CampaignSessionTie
 // @Failure      400  {object} ErrorResponse
 // @Failure      401  {object} ErrorResponse
 // @Failure      403  {object} ErrorResponse
@@ -303,7 +309,53 @@ func (h *campaignHandler) untieSession(c fiber.Ctx) error {
 // @Security     CookieAuth
 // @Router       /v1/campaigns/{id}/sessions/{sessionId} [patch]
 func (h *campaignHandler) editTie(c fiber.Ctx) error {
-	return c.SendStatus(fiber.StatusNotImplemented)
+	campaignId := c.Params("id")
+	sessionId := c.Params("sessionId")
+
+	var req EditTieRequest
+	if err := c.Bind().Body(&req); err != nil {
+		h.log.Warn().Err(err).Msg("invalid edit tie body")
+		return handleErr(c, uc.ErrInvalidData)
+	}
+
+	tie, err := h.uc.EditTie(c.Context(), campaignId, sessionId, entities.BuildViewerFromCtx(c), uc.EditTieInput{
+		BriefDescription: req.BriefDescription,
+	})
+	if err != nil {
+		return handleErr(c, err)
+	}
+	return c.Status(fiber.StatusOK).JSON(tie)
+}
+
+// @Summary      Set campaign-session ties order
+// @Tags         campaigns
+// @Accept       json
+// @Param        id         path  string          true  "Campaign ID"
+// @Param        body       body  []string        true  "Sessions IDs in desired order"
+// @Success      200  {array}  dtos.CampaignSessionTie
+// @Failure      400  {object} ErrorResponse
+// @Failure      401  {object} ErrorResponse
+// @Failure      403  {object} ErrorResponse
+// @Failure      404  {object} ErrorResponse
+// @Security     CookieAuth
+// @Router       /v1/campaigns/{id}/sessions/order [put]
+func (h *campaignHandler) reorderSessions(c fiber.Ctx) error {
+	campaignId := c.Params("id")
+
+	var body []string
+	if err := c.Bind().Body(&body); err != nil {
+		h.log.Warn().Err(err).Msg("invalid reorder sessions body")
+		return handleErr(c, uc.ErrInvalidData)
+	}
+
+	ties, err := h.uc.ReorderSessions(c.Context(), campaignId, body, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		return handleErr(c, err)
+	}
+	if ties == nil {
+		ties = []dtos.CampaignSessionTie{}
+	}
+	return c.Status(fiber.StatusOK).JSON(ties)
 }
 
 // --- players ----------------------------------------------------------------

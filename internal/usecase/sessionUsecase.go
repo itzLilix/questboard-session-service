@@ -126,6 +126,7 @@ func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Vi
 	}
 
 	if s.Status == dtos.Draft || s.Availability == dtos.Private {
+		if !v.IsAuthenticated() { return nil, ErrUnauthorized }
 		isParticipant, err := uc.isParticipant(ctx, s, v)
 		if err != nil {
 			return nil, mapRepoErr("check participant for get session by id", err)
@@ -169,7 +170,7 @@ func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Vi
 
 func (uc *sessionUsecase) Create(ctx context.Context, in SessionInput, v *entities.Viewer) (*dtos.Session, error) {
 	if !v.IsAuthenticated() {
-		return nil, ErrForbidden
+		return nil, ErrUnauthorized
 	}
 	if in.Title == nil || *in.Title == "" ||
 	   in.Format == nil ||
@@ -210,7 +211,7 @@ func (uc *sessionUsecase) Create(ctx context.Context, in SessionInput, v *entiti
 
 func (uc *sessionUsecase) Edit(ctx context.Context, id string, v *entities.Viewer, in SessionInput) (*dtos.Session, error) {
 	if !v.IsAuthenticated() {
-		return nil, ErrForbidden
+		return nil, ErrUnauthorized
 	}
 	if err := validateSession(&in); err != nil {
 		return nil, err
@@ -268,7 +269,7 @@ func (uc *sessionUsecase) Edit(ctx context.Context, id string, v *entities.Viewe
 
 func (uc *sessionUsecase) Delete(ctx context.Context, id string, v *entities.Viewer) error {
 	if !v.IsAuthenticated() {
-		return ErrForbidden
+		return ErrUnauthorized
 	}
 
 	existing, err := uc.repo.GetByID(ctx, id)
@@ -282,12 +283,20 @@ func (uc *sessionUsecase) Delete(ctx context.Context, id string, v *entities.Vie
 	if err := uc.repo.Delete(ctx, id); err != nil {
 		return mapRepoErr("delete session", err)
 	}
+
+	stats := make(map[string]int, 1)
+	stat, err := uc.repo.CountMasterStat(ctx, existing.MasterID)
+	stats[existing.MasterID] = stat
+	if err == nil {
+		_ = uc.prBroker.UpdateStats(ctx, stats, dtos.HostedStatName)
+	}
+
 	return nil
 }
 
 func (uc *sessionUsecase) ChangeStatus(ctx context.Context, id string, v *entities.Viewer, status dtos.SessionStatus) (*dtos.Session, error) {
 	if !v.IsAuthenticated() {
-		return nil, ErrForbidden
+		return nil, ErrUnauthorized
 	}
 	if !isValidSessionStatus(status) {
 		return nil, fmt.Errorf("%w: invalid status %q", ErrInvalidStatus, status)
@@ -403,7 +412,7 @@ func (uc *sessionUsecase) ListPlayers(ctx context.Context, sessionID string, v *
 }
 
 func (uc *sessionUsecase) Join(ctx context.Context, sessionID string, v *entities.Viewer) error {
-	if !v.IsAuthenticated() { return ErrForbidden }
+	if !v.IsAuthenticated() { return ErrUnauthorized }
 
 	s, err := uc.repo.GetByID(ctx, sessionID)
 	if err != nil {
@@ -425,7 +434,7 @@ func (uc *sessionUsecase) Join(ctx context.Context, sessionID string, v *entitie
 }
 
 func (uc *sessionUsecase) AddPlayers(ctx context.Context, sessionID string, playerIDs []string, v *entities.Viewer) error {
-	if !v.IsAuthenticated() { return ErrForbidden }
+	if !v.IsAuthenticated() { return ErrUnauthorized }
 	if len(playerIDs) == 0 { return nil }
 
 	s, err := uc.repo.GetByID(ctx, sessionID)

@@ -55,7 +55,7 @@ func (r *rbacMiddleware) Optional() fiber.Handler {
 		claims, err := r.tokenParser.ParseToken(token)
 		if err != nil {
 			r.log.Warn().Err(err).Str("path", c.Path()).Msg("optional auth: invalid token")
-			return c.Next()
+			return c.SendStatus(fiber.StatusUnauthorized)
 		}
 		c.Locals(LocalsUserID, claims.UserID)
 		c.Locals(LocalsUserRole, claims.Role)

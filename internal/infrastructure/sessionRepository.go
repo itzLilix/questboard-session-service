@@ -154,7 +154,7 @@ func (r *sessionRepository) List(ctx context.Context, p ListSessionsParams, v *e
 	// --- universal filters ---
 	q = q.Where(sq.Eq{"s.status": p.Status})
 	if p.Search != "" {
-		q = q.Where("s.title ILIKE ?", "%"+p.Search+"%")
+		q = q.Where("(s.title ILIKE ? OR ? <% s.title)", "%"+p.Search+"%", p.Search)
 	}
 	if p.Format != "" {
 		q = q.Where(sq.Eq{"s.format": p.Format})

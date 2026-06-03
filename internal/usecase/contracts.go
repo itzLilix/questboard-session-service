@@ -79,8 +79,9 @@ type CampaignRepository interface {
 	ListSessionTies(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error)
 	ListSessions(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.Session, error)
 	TieSession(ctx context.Context, p *infrastructure.TieSessionParams) error
-	EditTie(ctx context.Context, p *infrastructure.EditTieParams) error
+	EditTie(ctx context.Context, p *infrastructure.EditTieParams) (*dtos.CampaignSessionTie, error)
 	UntieSession(ctx context.Context, campaignID, sessionID string) error
+	ReorderSessions(ctx context.Context, campaignID string, orderedSessionIDs []string) error
 
 	IsCampaignMember(ctx context.Context, campaignID, userID string) (bool, error)
 	ListPlayers(ctx context.Context, campaignID string) ([]dtos.SessionPlayer, error)

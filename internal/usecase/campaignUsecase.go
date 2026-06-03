@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"time"
 
 	"github.com/itzLilix/questboard-session-service/internal/entities"
 	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
@@ -45,10 +44,7 @@ type TieSessionInput struct {
 }
 
 type EditTieInput struct {
-	OrderIndex        *int
 	BriefDescription  *string
-	CachedTitle       *string
-	CachedScheduledAt *time.Time
 }
 
 // --- methods -----------------------------------------------------------
@@ -82,7 +78,7 @@ func (uc *campaignUsecase) GetByID(ctx context.Context, id string, v *entities.V
 	// campaign it belongs to — hence the gate before we ever return campaign data.
 	if campaign.Availability == dtos.Private && !v.CanActAs(campaign.MasterID) {
 		if !v.IsAuthenticated() {
-			return nil, ErrNotFound
+			return nil, ErrUnauthorized
 		}
 		member, err := uc.repo.IsCampaignMember(ctx, id, v.UserID)
 		if err != nil {
@@ -107,7 +103,7 @@ func (uc *campaignUsecase) GetByID(ctx context.Context, id string, v *entities.V
 
 func (uc *campaignUsecase) Create(ctx context.Context, in CampaignInput, v *entities.Viewer) (*dtos.Campaign, error) {
 	if !v.IsAuthenticated() {
-		return nil, ErrForbidden
+		return nil, ErrUnauthorized
 	}
 
 	if in.Title == nil {
@@ -164,7 +160,7 @@ func (uc *campaignUsecase) ListSessions(ctx context.Context, campaignID string, 
 
 	if campaign.Availability == dtos.Private && !v.CanActAs(campaign.MasterID) {
 		if !v.IsAuthenticated() {
-			return nil, ErrNotFound
+			return nil, ErrUnauthorized
 		}
 		member, err := uc.repo.IsCampaignMember(ctx, campaignID, v.UserID)
 		if err != nil {
@@ -184,7 +180,7 @@ func (uc *campaignUsecase) ListSessions(ctx context.Context, campaignID string, 
 
 func (uc *campaignUsecase) TieSession(ctx context.Context, campaignID string, in TieSessionInput, v *entities.Viewer) error {
 	if !v.IsAuthenticated() {
-		return ErrForbidden
+		return ErrUnauthorized
 	}
 	if in.SessionID == "" {
 		return ErrInvalidData
@@ -223,12 +219,82 @@ func (uc *campaignUsecase) TieSession(ctx context.Context, campaignID string, in
 	return nil
 }
 
-func (uc *campaignUsecase) EditTie(ctx context.Context, campaignID, sessionID string, v *entities.Viewer, in EditTieInput) error {
-	return ErrNotFound
+func (uc *campaignUsecase) EditTie(ctx context.Context, campaignID, sessionID string, v *entities.Viewer, in EditTieInput) (*dtos.CampaignSessionTie, error) {
+	if !v.IsAuthenticated() {
+		return nil, ErrUnauthorized
+	}
+	if in.BriefDescription == nil {
+		return nil, ErrInvalidData
+	}
+	if err := validateEditTie(&in); err != nil {
+		return nil, ErrInvalidData
+	}
+
+	campaign, err := uc.repo.GetByID(ctx, campaignID)
+	if err != nil {
+		return nil, mapRepoErr("get campaign for edit tie", err)
+	}
+	if !v.CanActAs(campaign.MasterID) {
+		return nil, ErrForbidden
+	}
+
+	tie, err := uc.repo.EditTie(ctx, &infrastructure.EditTieParams{
+		CampaignID:       campaignID,
+		SessionID:        sessionID,
+		BriefDescription: in.BriefDescription,
+	})
+	if err != nil {
+		return nil, mapRepoErr("edit tie", err)
+	}
+	return tie, nil
 }
 
 func (uc *campaignUsecase) UntieSession(ctx context.Context, campaignID, sessionID string, v *entities.Viewer) error {
-	return ErrNotFound
+	if !v.IsAuthenticated() {
+		return ErrUnauthorized
+	}
+
+	campaign, err := uc.repo.GetByID(ctx, campaignID)
+	if err != nil {
+		return mapRepoErr("get campaign for untie session", err)
+	}
+	if !v.CanActAs(campaign.MasterID) {
+		return ErrForbidden
+	}
+
+	if err := uc.repo.UntieSession(ctx, campaignID, sessionID); err != nil {
+		return mapRepoErr("untie session", err)
+	}
+	return nil
+}
+
+func (uc *campaignUsecase) ReorderSessions(ctx context.Context, campaignID string, orderedSessionIDs []string, v *entities.Viewer) ([]dtos.CampaignSessionTie, error) {
+	if !v.IsAuthenticated() {
+		return nil, ErrUnauthorized
+	}
+	if len(orderedSessionIDs) == 0 {
+		return nil, ErrInvalidData
+	}
+
+	campaign, err := uc.repo.GetByID(ctx, campaignID)
+	if err != nil {
+		return nil, mapRepoErr("get campaign for reorder sessions", err)
+	}
+	if !v.CanActAs(campaign.MasterID) {
+		return nil, ErrForbidden
+	}
+
+	if err := uc.repo.ReorderSessions(ctx, campaignID, orderedSessionIDs); err != nil {
+		return nil, mapRepoErr("reorder sessions", err)
+	}
+
+	// Re-read so the handler hands back the freshly-ordered ties (the repo reorder
+	// returns only an error). Visibility-filtered exactly like GetByID's embed.
+	ties, err := uc.repo.ListSessionTies(ctx, campaignID, v)
+	if err != nil {
+		return nil, mapRepoErr("list session ties after reorder", err)
+	}
+	return ties, nil
 }
 
 func (uc *campaignUsecase) ListPlayers(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.SessionPlayer, error) {
