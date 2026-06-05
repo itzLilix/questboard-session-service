@@ -173,7 +173,7 @@ var sessionPlayerColumns = []string{
 	// character
 	"ch.id", "ch.player_id", "ch.name", "ch.class", "ch.level",
 	"ch.avatar_url", "ch.description", 
-	//"ch.sheet_url",
+	"ch.sheet_url",
 	"ch.created_at", "ch.updated_at",
 }
 

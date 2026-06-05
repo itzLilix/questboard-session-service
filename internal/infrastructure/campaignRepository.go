@@ -42,9 +42,10 @@ type CreateCampaignParams struct {
 }
 
 type UpdateCampaignParams struct {
-	Title       *string
-	Description *string
-	SystemID    *string
+	Title        *string
+	Description  *string
+	SystemID     *string
+	Availability *dtos.SessionAvailability
 }
 
 type TieSessionParams struct {
@@ -259,14 +260,78 @@ func (r *campaignRepository) Create(ctx context.Context, p *CreateCampaignParams
 }
 
 func (r *campaignRepository) Update(ctx context.Context, id string, p *UpdateCampaignParams) (*dtos.Campaign, error) {
-	return nil, nil
+	upd := r.psql.Update("campaigns").Where(sq.Eq{"id": id})
+
+	if p.Title != nil {
+		upd = upd.Set("title", *p.Title)
+	}
+	if p.Description != nil {
+		upd = upd.Set("description", nullString(*p.Description))
+	}
+	if p.SystemID != nil {
+		upd = upd.Set("system_id", nullString(*p.SystemID))
+	}
+	if p.Availability != nil {
+		upd = upd.Set("availability", *p.Availability)
+	}
+	upd = upd.Set("updated_at", sq.Expr("NOW()"))
+
+	query, args, err := upd.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build update campaign: %w", err)
+	}
+
+	tag, err := r.db.Exec(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("exec update campaign: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotFound
+	}
+
+	return r.GetByID(ctx, id)
 }
 
+// Delete hard-deletes a campaign. The trg_session_type trigger flips any tied
+// session back to oneshot as its campaign_sessions row cascades away, so the
+// sessions themselves survive — only the campaign and its ties are removed.
 func (r *campaignRepository) Delete(ctx context.Context, id string) error {
+	deleteSQL, args, err := r.psql.
+		Delete("campaigns").
+		Where(sq.Eq{"id": id}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build delete campaign: %w", err)
+	}
+
+	tag, err := r.db.Exec(ctx, deleteSQL, args...)
+	if err != nil {
+		return fmt.Errorf("exec delete campaign: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
 	return nil
 }
 
 func (r *campaignRepository) UpdateStatus(ctx context.Context, id string, status dtos.CampaignStatus) error {
+	query, args, err := r.psql.
+		Update("campaigns").
+		Set("status", status).
+		Set("updated_at", sq.Expr("NOW()")).
+		Where(sq.Eq{"id": id}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build update campaign status: %w", err)
+	}
+
+	tag, err := r.db.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("exec update campaign status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
 	return nil
 }
 

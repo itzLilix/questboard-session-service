@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/itzLilix/questboard-session-service/internal/entities"
 	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
@@ -136,15 +137,96 @@ func (uc *campaignUsecase) Create(ctx context.Context, in CampaignInput, v *enti
 }
 
 func (uc *campaignUsecase) Edit(ctx context.Context, id string, v *entities.Viewer, in CampaignInput) (*dtos.Campaign, error) {
-	return nil, ErrNotFound
+	if !v.IsAuthenticated() {
+		return nil, ErrUnauthorized
+	}
+	if err := validateCampaign(&in, v); err != nil {
+		return nil, err
+	}
+
+	existing, err := uc.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, mapRepoErr("get campaign for edit", err)
+	}
+	if !v.CanActAs(existing.MasterID) {
+		return nil, ErrForbidden
+	}
+	if existing.Status == dtos.CampaignCompleted || existing.Status == dtos.CampaignCancelled {
+		return nil, fmt.Errorf("%w: cannot edit after completion/cancellation", ErrInvalidStatus)
+	}
+
+	updated, err := uc.repo.Update(ctx, id, &infrastructure.UpdateCampaignParams{
+		Title:        in.Title,
+		Description:  in.Description,
+		SystemID:     in.SystemID,
+		Availability: in.Availability,
+	})
+	if err != nil {
+		return nil, mapRepoErr("update campaign", err)
+	}
+	return updated, nil
 }
 
 func (uc *campaignUsecase) Delete(ctx context.Context, id string, v *entities.Viewer) error {
-	return ErrNotFound
+	if !v.IsAuthenticated() {
+		return ErrUnauthorized
+	}
+
+	existing, err := uc.repo.GetByID(ctx, id)
+	if err != nil {
+		return mapRepoErr("get campaign for delete", err)
+	}
+	if !v.CanActAs(existing.MasterID) {
+		return ErrForbidden
+	}
+
+	if err := uc.repo.Delete(ctx, id); err != nil {
+		return mapRepoErr("delete campaign", err)
+	}
+	return nil
 }
 
 func (uc *campaignUsecase) ChangeStatus(ctx context.Context, id string, v *entities.Viewer, status dtos.CampaignStatus) error {
-	return ErrNotFound
+	if !v.IsAuthenticated() {
+		return ErrUnauthorized
+	}
+	if !isValidCampaignStatus(status) {
+		return fmt.Errorf("%w: invalid status %q", ErrInvalidStatus, status)
+	}
+
+	existing, err := uc.repo.GetByID(ctx, id)
+	if err != nil {
+		return mapRepoErr("get campaign for status change", err)
+	}
+	if !v.CanActAs(existing.MasterID) {
+		return ErrForbidden
+	}
+
+	// switch existing.Status {
+	// case dtos.CampaignActive:
+	// 	if status != dtos.CampaignPaused && status != dtos.CampaignCompleted && status != dtos.CampaignCancelled {
+	// 		return ErrInvalidStatus
+	// 	}
+	// case dtos.CampaignPaused:
+	// 	if status != dtos.CampaignActive && status != dtos.CampaignCompleted && status != dtos.CampaignCancelled {
+	// 		return ErrInvalidStatus
+	// 	}
+	// case dtos.CampaignCancelled:
+	// 	if status != dtos.CampaignActive {
+	// 		return ErrInvalidStatus
+	// 	}
+	// case dtos.CampaignCompleted:
+	// 	if status != dtos.CampaignActive {
+	// 		return ErrInvalidStatus
+	// 	}
+	// default:
+	// 	return ErrInvalidStatus
+	// }
+
+	if err := uc.repo.UpdateStatus(ctx, id, status); err != nil {
+		return mapRepoErr("update campaign status", err)
+	}
+	return nil
 }
 
 // ListSessions returns a campaign's sessions as full session cards (the profile

@@ -79,9 +79,11 @@ func main() {
 	sessionUsecase := usecase.NewSessionUsecase(sessionRepo, profileClient, profileClient)
 	campaignUsecase := usecase.NewCampaignUsecase(campaignRepo, sessionRepo)
 	characterUsecase := usecase.NewCharacterUsecase()
+	chatUsecase := usecase.NewChatUsecase()
 
 	v1 := app.Group("/v1")
 
+	handlers.NewChatHandler(chatUsecase, sessionUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
 	handlers.NewGameSystemsHandler(gameSystemsUsecase, log.Logger, rbacMiddleware).RegisterRoutes(v1)
 	handlers.NewSessionHandler(sessionUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
 	handlers.NewCampaignHandler(campaignUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)

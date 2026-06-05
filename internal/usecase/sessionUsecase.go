@@ -242,6 +242,12 @@ func (uc *sessionUsecase) Edit(ctx context.Context, id string, v *entities.Viewe
 		}
 	}
 
+	if in.Format != nil && *in.Format == dtos.Offline && existing.Status != dtos.Draft {
+		if in.Address == nil || *in.Address == "" || in.Lat == nil || in.Lng == nil {
+			return nil, fmt.Errorf("%w: offline sessions require location fields", ErrInvalidData)
+		}
+	}
+
 	updated, err := uc.repo.Update(ctx, id, &infrastructure.UpdateSessionParams{
 		Title:         in.Title,
 		Description:   in.Description,

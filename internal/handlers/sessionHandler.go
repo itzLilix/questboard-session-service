@@ -19,6 +19,7 @@ type sessionHandler struct {
 	rbac middleware.RBACMiddleware
 	log  zerolog.Logger
 	uc SessionUsecase
+	chat ChatHandler
 }
 
 func NewSessionHandler(uc SessionUsecase, rbac middleware.RBACMiddleware, log zerolog.Logger) SessionHandler {

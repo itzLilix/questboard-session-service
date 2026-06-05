@@ -193,7 +193,26 @@ func (h *campaignHandler) create(c fiber.Ctx) error {
 // @Failure      500   {object} ErrorResponse
 // @Security     CookieAuth
 // @Router       /v1/campaigns/{id} [patch]
-func (h *campaignHandler) edit(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
+func (h *campaignHandler) edit(c fiber.Ctx) error {
+	var req EditCampaignRequest
+	if err := c.Bind().Body(&req); err != nil {
+		h.log.Warn().Err(err).Msg("invalid edit campaign body")
+		return handleErr(c, uc.ErrInvalidData)
+	}
+
+	id := c.Params("id")
+	campaign, err := h.uc.Edit(c.Context(), id, entities.BuildViewerFromCtx(c), uc.CampaignInput{
+		Title:        req.Title,
+		Description:  req.Description,
+		Availability: req.Availability,
+		SystemID:     req.SystemID,
+	})
+	if err != nil {
+		h.log.Error().Err(err).Str("campaignId", id).Msg("edit campaign failed")
+		return handleErr(c, err)
+	}
+	return c.Status(fiber.StatusOK).JSON(campaign)
+}
 
 // @Summary      Delete a campaign
 // @Tags         campaigns
@@ -205,7 +224,14 @@ func (h *campaignHandler) edit(c fiber.Ctx) error { return c.SendStatus(fiber.St
 // @Failure      500  {object} ErrorResponse
 // @Security     CookieAuth
 // @Router       /v1/campaigns/{id} [delete]
-func (h *campaignHandler) delete(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
+func (h *campaignHandler) delete(c fiber.Ctx) error {
+	id := c.Params("id")
+	if err := h.uc.Delete(c.Context(), id, entities.BuildViewerFromCtx(c)); err != nil {
+		h.log.Error().Err(err).Str("campaignId", id).Msg("delete campaign failed")
+		return handleErr(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
+}
 
 // @Summary      Change campaign status
 // @Tags         campaigns
@@ -220,7 +246,17 @@ func (h *campaignHandler) delete(c fiber.Ctx) error { return c.SendStatus(fiber.
 // @Security     CookieAuth
 // @Router       /v1/campaigns/{id}/status [patch]
 func (h *campaignHandler) changeStatus(c fiber.Ctx) error {
-	return c.SendStatus(fiber.StatusNotImplemented)
+	var req ChangeCampaignStatusRequest
+	if err := c.Bind().Body(&req); err != nil || req.Status == "" {
+		return handleErr(c, uc.ErrInvalidData)
+	}
+
+	id := c.Params("id")
+	if err := h.uc.ChangeStatus(c.Context(), id, entities.BuildViewerFromCtx(c), dtos.CampaignStatus(req.Status)); err != nil {
+		h.log.Error().Err(err).Str("campaignId", id).Str("status", req.Status).Msg("change campaign status failed")
+		return handleErr(c, err)
+	}
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 // --- sessions in campaign ---------------------------------------------------
