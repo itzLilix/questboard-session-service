@@ -260,6 +260,10 @@ definitions:
         items:
           $ref: '#/definitions/dtos.Session'
         type: array
+      membership:
+        additionalProperties:
+          $ref: '#/definitions/dtos.SessionMembership'
+        type: object
       nextCursor:
         type: string
       users:
@@ -267,6 +271,29 @@ definitions:
           $ref: '#/definitions/dtos.UserBrief'
         type: object
     type: object
+  dtos.SessionMembership:
+    enum:
+    - master
+    - player
+    - kicked
+    - left
+    - applicant
+    type: string
+    x-enum-comments:
+      MembershipApplicant: pending application
+      MembershipPlayer: active seat
+    x-enum-descriptions:
+    - ""
+    - active seat
+    - ""
+    - ""
+    - pending application
+    x-enum-varnames:
+    - MembershipMaster
+    - MembershipPlayer
+    - MembershipKicked
+    - MembershipLeft
+    - MembershipApplicant
   dtos.SessionPlayer:
     properties:
       character:
@@ -496,8 +523,6 @@ definitions:
     properties:
       briefDescription:
         type: string
-      orderIndex:
-        type: integer
     type: object
   internal_handlers.ErrorResponse:
     properties:
@@ -885,8 +910,10 @@ paths:
         schema:
           $ref: '#/definitions/internal_handlers.EditTieRequest'
       responses:
-        "204":
-          description: No Content
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dtos.CampaignSessionTie'
         "400":
           description: Bad Request
           schema:
@@ -906,6 +933,52 @@ paths:
       security:
       - CookieAuth: []
       summary: Update campaign-session tie metadata
+      tags:
+      - campaigns
+  /v1/campaigns/{id}/sessions/order:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Campaign ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Sessions IDs in desired order
+        in: body
+        name: body
+        required: true
+        schema:
+          items:
+            type: string
+          type: array
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/dtos.CampaignSessionTie'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/internal_handlers.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Set campaign-session ties order
       tags:
       - campaigns
   /v1/campaigns/{id}/status:

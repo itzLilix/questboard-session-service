@@ -269,7 +269,7 @@ func (r *sessionRepository) GetByID(ctx context.Context, id string) (*dtos.Sessi
 		return nil, fmt.Errorf("build get session query: %w", err)
 	}
 
-	row := r.db.QueryRow(ctx, query, args...)
+	row := execFromCtx(ctx, r.db).QueryRow(ctx, query, args...)
 	s := &dtos.Session{}
 	if err := scanSession(row, s); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -324,6 +324,86 @@ func (r *sessionRepository) ListCampaignRefs(ctx context.Context, sessionIDs []s
 	return refs, nil
 }
 
+// GetViewerMemberships returns the viewer's relation to each of the given
+// sessions, keyed by session id: the session_players status (player/kicked/left)
+// or a pending application (applicant). Sessions without a relation are absent
+// from the map. The master relation is not covered here — callers derive it
+// from sessions.master_id, which they already hold.
+func (r *sessionRepository) GetViewerMemberships(ctx context.Context, sessionIDs []string, userID string) (map[string]dtos.SessionMembership, error) {
+	out := make(map[string]dtos.SessionMembership, len(sessionIDs))
+	if len(sessionIDs) == 0 || userID == "" {
+		return out, nil
+	}
+
+	playersSQL, playersArgs, err := r.psql.
+		Select("sp.session_id", "sp.status").
+		From("session_players sp").
+		Where(sq.Eq{"sp.session_id": sessionIDs, "sp.player_id": userID}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build viewer player memberships query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, playersSQL, playersArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("query viewer player memberships: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			sessionID string
+			status    dtos.SessionPlayerStatus
+		)
+		if err := rows.Scan(&sessionID, &status); err != nil {
+			return nil, fmt.Errorf("scan viewer player membership: %w", err)
+		}
+		switch status {
+		case dtos.PlayerActive:
+			out[sessionID] = dtos.MembershipPlayer
+		case dtos.PlayerKicked:
+			out[sessionID] = dtos.MembershipKicked
+		case dtos.PlayerLeft:
+			out[sessionID] = dtos.MembershipLeft
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate viewer player memberships: %w", err)
+	}
+
+	appsSQL, appsArgs, err := r.psql.
+		Select("sa.session_id").
+		From("session_applications sa").
+		Where(sq.Eq{"sa.session_id": sessionIDs, "sa.applicant_id": userID, "sa.status": dtos.ApplicationPending}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build viewer applications query: %w", err)
+	}
+
+	appRows, err := r.db.Query(ctx, appsSQL, appsArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("query viewer applications: %w", err)
+	}
+	defer appRows.Close()
+
+	for appRows.Next() {
+		var sessionID string
+		if err := appRows.Scan(&sessionID); err != nil {
+			return nil, fmt.Errorf("scan viewer application: %w", err)
+		}
+		// A seated or kicked player keeps that status; a pending application
+		// supersedes "left" (the viewer walked out and re-applied).
+		if cur, ok := out[sessionID]; !ok || cur == dtos.MembershipLeft {
+			out[sessionID] = dtos.MembershipApplicant
+		}
+	}
+	if err := appRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate viewer applications: %w", err)
+	}
+
+	return out, nil
+}
+
 func (r *sessionRepository) Create(ctx context.Context, p *CreateSessionParams) (*dtos.Session, error) {
 	insert, args, err := r.psql.
 		Insert("sessions").
@@ -348,7 +428,7 @@ func (r *sessionRepository) Create(ctx context.Context, p *CreateSessionParams) 
 	}
 
 	var newID string
-	if err := r.db.QueryRow(ctx, insert, args...).Scan(&newID); err != nil {
+	if err := execFromCtx(ctx, r.db).QueryRow(ctx, insert, args...).Scan(&newID); err != nil {
 		return nil, fmt.Errorf("insert session: %w", err)
 	}
 
@@ -466,7 +546,7 @@ func (r *sessionRepository) IsPlayer(ctx context.Context, sessionID, userID stri
 		Select("sp.player_id").
 		From("session_players sp").
 		Join("sessions s ON s.id = sp.session_id").
-		Where(sq.Eq{"s.id": sessionID, "sp.player_id": userID}).
+		Where(sq.Eq{"s.id": sessionID, "sp.player_id": userID, "sp.status": dtos.PlayerActive,}).
 		ToSql()
 	if err != nil {
 		return false, fmt.Errorf("build check participant query: %w", err)

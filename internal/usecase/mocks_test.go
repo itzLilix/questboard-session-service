@@ -1560,6 +1560,80 @@ func (_c *MockSessionRepository_GetSystemStats_Call) RunAndReturn(run func(ctx c
 	return _c
 }
 
+// GetViewerMemberships provides a mock function for the type MockSessionRepository
+func (_mock *MockSessionRepository) GetViewerMemberships(ctx context.Context, sessionIDs []string, userID string) (map[string]dtos.SessionMembership, error) {
+	ret := _mock.Called(ctx, sessionIDs, userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetViewerMemberships")
+	}
+
+	var r0 map[string]dtos.SessionMembership
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []string, string) (map[string]dtos.SessionMembership, error)); ok {
+		return returnFunc(ctx, sessionIDs, userID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []string, string) map[string]dtos.SessionMembership); ok {
+		r0 = returnFunc(ctx, sessionIDs, userID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]dtos.SessionMembership)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, []string, string) error); ok {
+		r1 = returnFunc(ctx, sessionIDs, userID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockSessionRepository_GetViewerMemberships_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetViewerMemberships'
+type MockSessionRepository_GetViewerMemberships_Call struct {
+	*mock.Call
+}
+
+// GetViewerMemberships is a helper method to define mock.On call
+//   - ctx context.Context
+//   - sessionIDs []string
+//   - userID string
+func (_e *MockSessionRepository_Expecter) GetViewerMemberships(ctx interface{}, sessionIDs interface{}, userID interface{}) *MockSessionRepository_GetViewerMemberships_Call {
+	return &MockSessionRepository_GetViewerMemberships_Call{Call: _e.mock.On("GetViewerMemberships", ctx, sessionIDs, userID)}
+}
+
+func (_c *MockSessionRepository_GetViewerMemberships_Call) Run(run func(ctx context.Context, sessionIDs []string, userID string)) *MockSessionRepository_GetViewerMemberships_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []string
+		if args[1] != nil {
+			arg1 = args[1].([]string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSessionRepository_GetViewerMemberships_Call) Return(stringToSessionMembership map[string]dtos.SessionMembership, err error) *MockSessionRepository_GetViewerMemberships_Call {
+	_c.Call.Return(stringToSessionMembership, err)
+	return _c
+}
+
+func (_c *MockSessionRepository_GetViewerMemberships_Call) RunAndReturn(run func(ctx context.Context, sessionIDs []string, userID string) (map[string]dtos.SessionMembership, error)) *MockSessionRepository_GetViewerMemberships_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // IsPlayer provides a mock function for the type MockSessionRepository
 func (_mock *MockSessionRepository) IsPlayer(ctx context.Context, sessionID string, userID string) (bool, error) {
 	ret := _mock.Called(ctx, sessionID, userID)
@@ -2737,20 +2811,31 @@ func (_c *MockCampaignRepository_Delete_Call) RunAndReturn(run func(ctx context.
 }
 
 // EditTie provides a mock function for the type MockCampaignRepository
-func (_mock *MockCampaignRepository) EditTie(ctx context.Context, p *infrastructure.EditTieParams) error {
+func (_mock *MockCampaignRepository) EditTie(ctx context.Context, p *infrastructure.EditTieParams) (*dtos.CampaignSessionTie, error) {
 	ret := _mock.Called(ctx, p)
 
 	if len(ret) == 0 {
 		panic("no return value specified for EditTie")
 	}
 
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *infrastructure.EditTieParams) error); ok {
+	var r0 *dtos.CampaignSessionTie
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *infrastructure.EditTieParams) (*dtos.CampaignSessionTie, error)); ok {
+		return returnFunc(ctx, p)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *infrastructure.EditTieParams) *dtos.CampaignSessionTie); ok {
 		r0 = returnFunc(ctx, p)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*dtos.CampaignSessionTie)
+		}
 	}
-	return r0
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *infrastructure.EditTieParams) error); ok {
+		r1 = returnFunc(ctx, p)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
 // MockCampaignRepository_EditTie_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EditTie'
@@ -2783,12 +2868,12 @@ func (_c *MockCampaignRepository_EditTie_Call) Run(run func(ctx context.Context,
 	return _c
 }
 
-func (_c *MockCampaignRepository_EditTie_Call) Return(err error) *MockCampaignRepository_EditTie_Call {
-	_c.Call.Return(err)
+func (_c *MockCampaignRepository_EditTie_Call) Return(campaignSessionTie *dtos.CampaignSessionTie, err error) *MockCampaignRepository_EditTie_Call {
+	_c.Call.Return(campaignSessionTie, err)
 	return _c
 }
 
-func (_c *MockCampaignRepository_EditTie_Call) RunAndReturn(run func(ctx context.Context, p *infrastructure.EditTieParams) error) *MockCampaignRepository_EditTie_Call {
+func (_c *MockCampaignRepository_EditTie_Call) RunAndReturn(run func(ctx context.Context, p *infrastructure.EditTieParams) (*dtos.CampaignSessionTie, error)) *MockCampaignRepository_EditTie_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -3219,6 +3304,69 @@ func (_c *MockCampaignRepository_ListSessions_Call) Return(sessions []dtos.Sessi
 }
 
 func (_c *MockCampaignRepository_ListSessions_Call) RunAndReturn(run func(ctx context.Context, campaignID string, v *entities.Viewer) ([]dtos.Session, error)) *MockCampaignRepository_ListSessions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ReorderSessions provides a mock function for the type MockCampaignRepository
+func (_mock *MockCampaignRepository) ReorderSessions(ctx context.Context, campaignID string, orderedSessionIDs []string) error {
+	ret := _mock.Called(ctx, campaignID, orderedSessionIDs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReorderSessions")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) error); ok {
+		r0 = returnFunc(ctx, campaignID, orderedSessionIDs)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockCampaignRepository_ReorderSessions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReorderSessions'
+type MockCampaignRepository_ReorderSessions_Call struct {
+	*mock.Call
+}
+
+// ReorderSessions is a helper method to define mock.On call
+//   - ctx context.Context
+//   - campaignID string
+//   - orderedSessionIDs []string
+func (_e *MockCampaignRepository_Expecter) ReorderSessions(ctx interface{}, campaignID interface{}, orderedSessionIDs interface{}) *MockCampaignRepository_ReorderSessions_Call {
+	return &MockCampaignRepository_ReorderSessions_Call{Call: _e.mock.On("ReorderSessions", ctx, campaignID, orderedSessionIDs)}
+}
+
+func (_c *MockCampaignRepository_ReorderSessions_Call) Run(run func(ctx context.Context, campaignID string, orderedSessionIDs []string)) *MockCampaignRepository_ReorderSessions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCampaignRepository_ReorderSessions_Call) Return(err error) *MockCampaignRepository_ReorderSessions_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockCampaignRepository_ReorderSessions_Call) RunAndReturn(run func(ctx context.Context, campaignID string, orderedSessionIDs []string) error) *MockCampaignRepository_ReorderSessions_Call {
 	_c.Call.Return(run)
 	return _c
 }

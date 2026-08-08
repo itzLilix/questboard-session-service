@@ -71,4 +71,6 @@ type SessionUsecase interface {
 	GetCardData(ctx context.Context, masterIDs []string) ([]dtos.SessionCardData, error)
 }
 
-type ChatUsecase interface {}
+type ChatUsecase interface {
+	ListForSession(ctx context.Context, sessionID string, v *entities.Viewer) ([]dtos.ChatSummary, error)
+}

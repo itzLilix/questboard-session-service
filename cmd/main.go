@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	sq "github.com/Masterminds/squirrel"
@@ -12,6 +15,7 @@ import (
 	_ "github.com/itzLilix/questboard-session-service/docs"
 	"github.com/itzLilix/questboard-session-service/internal/config"
 	"github.com/itzLilix/questboard-session-service/internal/handlers"
+	"github.com/itzLilix/questboard-session-service/internal/handlers/chatws"
 	"github.com/itzLilix/questboard-session-service/internal/infrastructure"
 	"github.com/itzLilix/questboard-session-service/internal/middleware"
 	"github.com/itzLilix/questboard-session-service/internal/usecase"
@@ -73,21 +77,39 @@ func main() {
 	gameSystemsRepo := infrastructure.NewGameSystemsRepository(conn, psql)
 	sessionRepo := infrastructure.NewSessionRepository(conn, psql)
 	campaignRepo := infrastructure.NewCampaignRepository(conn, psql)
+	chatRepo := infrastructure.NewChatRepository(conn, psql)
 	profileClient := infrastructure.NewHTTPProfileClient(cfg.ProfileServiceURL, cfg.InternalToken)
+	txManager := infrastructure.NewTxManager(conn)
 
 	gameSystemsUsecase := usecase.NewGameSystemsUsecase(gameSystemsRepo)
-	sessionUsecase := usecase.NewSessionUsecase(sessionRepo, profileClient, profileClient)
-	campaignUsecase := usecase.NewCampaignUsecase(campaignRepo, sessionRepo)
+	sessionUsecase := usecase.NewSessionUsecase(sessionRepo, chatRepo, profileClient, profileClient, txManager)
+	campaignUsecase := usecase.NewCampaignUsecase(campaignRepo, sessionRepo, chatRepo, txManager)
 	characterUsecase := usecase.NewCharacterUsecase()
-	chatUsecase := usecase.NewChatUsecase()
+	chatUsecase := usecase.NewChatUsecase(chatRepo, sessionRepo)
 
 	v1 := app.Group("/v1")
 
-	handlers.NewChatHandler(chatUsecase, sessionUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
+	handlers.NewChatHandler(chatUsecase, rbacMiddleware, log.Logger, chatws.NewHub()).RegisterRoutes(v1)
 	handlers.NewGameSystemsHandler(gameSystemsUsecase, log.Logger, rbacMiddleware).RegisterRoutes(v1)
-	handlers.NewSessionHandler(sessionUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
+	handlers.NewSessionHandler(sessionUsecase, chatUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
 	handlers.NewCampaignHandler(campaignUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
 	handlers.NewCharacterHandler(characterUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
+	//chatws.RegisterRoutes(app, chatws.NewHub(log.Logger), chatRepo, chatUsecase, chatUsecase, log.Logger)
 
-	log.Fatal().Err(app.Listen(":" + cfg.ServerPort)).Msg("server stopped")
+	go func() {
+		if err := app.Listen(":" + cfg.ServerPort); err != nil {
+			log.Fatal().Err(err).Msg("server stopped")
+		}
+	}()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	<-ctx.Done()
+
+	log.Info().Msg("shutdown signal received, draining connections")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := app.ShutdownWithContext(shutdownCtx); err != nil {
+		log.Error().Err(err).Msg("graceful shutdown failed")
+	}
 }

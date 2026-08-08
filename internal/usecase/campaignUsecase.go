@@ -11,11 +11,13 @@ import (
 
 type campaignUsecase struct {
 	repo     CampaignRepository
-	sessions SessionRepository
+	sessionRepo SessionRepository
+	chatRepo ChatRepository
+	txManager infrastructure.TxManager
 }
 
-func NewCampaignUsecase(repo CampaignRepository, sessions SessionRepository) *campaignUsecase {
-	return &campaignUsecase{repo: repo, sessions: sessions}
+func NewCampaignUsecase(repo CampaignRepository, sessionRepo SessionRepository, chatRepo ChatRepository, txManager infrastructure.TxManager) *campaignUsecase {
+	return &campaignUsecase{repo: repo, sessionRepo: sessionRepo, chatRepo: chatRepo, txManager: txManager}
 }
 
 // --- input types -----------------------------------------------------------
@@ -122,14 +124,25 @@ func (uc *campaignUsecase) Create(ctx context.Context, in CampaignInput, v *enti
 		availability = *in.Availability
 	}
 
-	campaign, err := uc.repo.Create(ctx, &infrastructure.CreateCampaignParams{
+	params := &infrastructure.CreateCampaignParams{
 		Title:        *in.Title,
 		Description:  in.Description,
 		MasterID:     masterId,
 		SystemID:     in.SystemID,
 		Status:       status,
 		Availability: availability,
+	}
+
+	var campaign *dtos.Campaign
+	err := uc.txManager.WithTx(ctx, func(ctx context.Context) error {
+		var err error
+		campaign, err = uc.repo.Create(ctx, params)
+		if err != nil {
+			return err
+		}
+		return uc.chatRepo.InitGeneralChat(ctx, campaign.ID, dtos.CampaignType)
 	})
+	//campaign, err := uc.repo.Create(ctx, params)
 	if err != nil {
 		return nil, mapRepoErr("create campaign", err)
 	}
@@ -276,7 +289,7 @@ func (uc *campaignUsecase) TieSession(ctx context.Context, campaignID string, in
 		return ErrForbidden
 	}
 
-	session, err := uc.sessions.GetByID(ctx, in.SessionID)
+	session, err := uc.sessionRepo.GetByID(ctx, in.SessionID)
 	if err != nil {
 		return mapRepoErr("get session for tie session", err)
 	}
@@ -287,13 +300,25 @@ func (uc *campaignUsecase) TieSession(ctx context.Context, campaignID string, in
 		return ErrConflict
 	}
 
-	err = uc.repo.TieSession(ctx, &infrastructure.TieSessionParams{
+	params := &infrastructure.TieSessionParams{
 		CampaignID:        campaignID,
 		SessionID:         in.SessionID,
 		OrderIndex:        in.OrderIndex,
 		BriefDescription:  in.BriefDescription,
 		CachedTitle:       &session.Title,
 		CachedScheduledAt: session.ScheduledAt,
+	}
+
+	// err = uc.repo.TieSession(ctx, params)
+	// if err != nil {
+	// 	return mapRepoErr("tie session", err)
+	// }
+	err = uc.txManager.WithTx(ctx, func(ctx context.Context) error {
+		err = uc.repo.TieSession(ctx, params)
+		if err != nil {
+			return mapRepoErr("tie session", err)
+		}
+		return uc.chatRepo.RetireSessionChat(ctx, in.SessionID)
 	})
 	if err != nil {
 		return mapRepoErr("tie session", err)
@@ -344,7 +369,17 @@ func (uc *campaignUsecase) UntieSession(ctx context.Context, campaignID, session
 		return ErrForbidden
 	}
 
-	if err := uc.repo.UntieSession(ctx, campaignID, sessionID); err != nil {
+	// if err := uc.repo.UntieSession(ctx, campaignID, sessionID); err != nil {
+	// 	return mapRepoErr("untie session", err)
+	// }
+	err = uc.txManager.WithTx(ctx, func(ctx context.Context) error {
+		err = uc.repo.UntieSession(ctx, campaignID, sessionID)
+		if err != nil {
+			return mapRepoErr("untie session", err)
+		}
+		return uc.chatRepo.InitGeneralChat(ctx, sessionID, dtos.OneshotType)
+	})
+	if err != nil {
 		return mapRepoErr("untie session", err)
 	}
 	return nil

@@ -13,12 +13,14 @@ import (
 
 type sessionUsecase struct {
 	repo    SessionRepository
+	chatRepo ChatRepository
 	profile ProfileClient
 	prBroker ProfileBroker
+	txManager infrastructure.TxManager
 }
 
-func NewSessionUsecase(repo SessionRepository, profile ProfileClient, profileBroker ProfileBroker) *sessionUsecase {
-	return &sessionUsecase{repo: repo, profile: profile, prBroker: profileBroker}
+func NewSessionUsecase(repo SessionRepository, chatRepo ChatRepository, profile ProfileClient, profileBroker ProfileBroker, txManager infrastructure.TxManager) *sessionUsecase {
+	return &sessionUsecase{repo: repo, chatRepo: chatRepo, profile: profile, prBroker: profileBroker, txManager: txManager}
 }
 
 func (uc *sessionUsecase) enrich(ctx context.Context, ids []string) map[string]dtos.UserBrief {
@@ -31,6 +33,32 @@ func (uc *sessionUsecase) enrich(ctx context.Context, ids []string) map[string]d
 		return map[string]dtos.UserBrief{}
 	}
 	return briefs
+}
+
+// viewerMemberships assembles the viewer's relation to each session, keyed by
+// session id: player/kicked/left/applicant from the repo, plus master derived
+// from masterId (always wins). Guests get an empty map; unrelated sessions are
+// absent.
+func (uc *sessionUsecase) viewerMemberships(ctx context.Context, items []dtos.Session, v *entities.Viewer) (map[string]dtos.SessionMembership, error) {
+	if !v.IsAuthenticated() || len(items) == 0 {
+		return map[string]dtos.SessionMembership{}, nil
+	}
+
+	ids := make([]string, 0, len(items))
+	for _, s := range items {
+		ids = append(ids, s.Id)
+	}
+	membership, err := uc.repo.GetViewerMemberships(ctx, ids, v.UserID)
+	if err != nil {
+		return nil, mapRepoErr("get viewer memberships", err)
+	}
+
+	for _, s := range items {
+		if v.Is(s.MasterID) {
+			membership[s.Id] = dtos.MembershipMaster
+		}
+	}
+	return membership, nil
 }
 
 // --- input -----------------------------------------------------------
@@ -92,9 +120,10 @@ func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput, v *ent
 	}
 	if len(params.Status) == 0 {
 		return dtos.SessionListResponse{
-			Items:     []dtos.Session{},
-			Users:     map[string]dtos.UserBrief{},
-			Campaigns: map[string]dtos.SessionCampaignRef{},
+			Items:      []dtos.Session{},
+			Users:      map[string]dtos.UserBrief{},
+			Campaigns:  map[string]dtos.SessionCampaignRef{},
+			Membership: map[string]dtos.SessionMembership{},
 		}, nil
 	}
 
@@ -116,7 +145,12 @@ func (uc *sessionUsecase) List(ctx context.Context, in ListSessionsInput, v *ent
 		return dtos.SessionListResponse{}, mapRepoErr("list campaign refs for list sessions", err)
 	}
 
-	return dtos.SessionListResponse{Items: items, NextCursor: nextCursor, Users: users, Campaigns: campaigns}, nil
+	membership, err := uc.viewerMemberships(ctx, items, v)
+	if err != nil {
+		return dtos.SessionListResponse{}, mapRepoErr("get viewer membership for list sessions", err)
+	}
+
+	return dtos.SessionListResponse{Items: items, NextCursor: nextCursor, Users: users, Campaigns: campaigns, Membership: membership}, nil
 }
 
 func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Viewer) (*dtos.SessionResponse, error) {
@@ -165,7 +199,12 @@ func (uc *sessionUsecase) GetByID(ctx context.Context, id string, v *entities.Vi
 		}
 	}
 
-	return &dtos.SessionResponse{Session: *s, Players: players, Users: users, CampaignRef: campaignRef}, nil
+	membership, err := uc.viewerMemberships(ctx, []dtos.Session{*s}, v)
+	if err != nil {
+		return nil, mapRepoErr("get viewer membership for get session by id", err)
+	}
+
+	return &dtos.SessionResponse{Session: *s, Players: players, Users: users, CampaignRef: campaignRef, Membership: membership[id]}, nil
 }
 
 func (uc *sessionUsecase) Create(ctx context.Context, in SessionInput, v *entities.Viewer) (*dtos.Session, error) {
@@ -202,7 +241,16 @@ func (uc *sessionUsecase) Create(ctx context.Context, in SessionInput, v *entiti
 		Price:         inOr(in.Price, 0),
 	}
 
-	s, err := uc.repo.Create(ctx, params)
+	var s *dtos.Session
+	err := uc.txManager.WithTx(ctx, func(ctx context.Context) error {
+		var err error
+		s, err = uc.repo.Create(ctx, params)
+		if err != nil {
+			return err
+		}
+		return uc.chatRepo.InitGeneralChat(ctx, s.Id, s.Type)
+	})
+	//s, err := uc.repo.Create(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("create session: %w: %v", ErrInternal, err)
 	}

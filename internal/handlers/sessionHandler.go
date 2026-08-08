@@ -19,12 +19,13 @@ type sessionHandler struct {
 	rbac middleware.RBACMiddleware
 	log  zerolog.Logger
 	uc SessionUsecase
-	chat ChatHandler
+	chatUC ChatUsecase
 }
 
-func NewSessionHandler(uc SessionUsecase, rbac middleware.RBACMiddleware, log zerolog.Logger) SessionHandler {
+func NewSessionHandler(uc SessionUsecase, chatUC ChatUsecase, rbac middleware.RBACMiddleware, log zerolog.Logger) SessionHandler {
 	return &sessionHandler{
 		uc:   uc,
+		chatUC: chatUC,
 		rbac: rbac,
 		log:  log,
 	}
@@ -121,6 +122,9 @@ func (h *sessionHandler) RegisterRoutes(app fiber.Router) {
 	s.Post("/:id/comments", h.rbac.Protected(), h.addComment)
 	s.Delete("/:id/comments/:commentId", h.rbac.Protected(), h.deleteComment)
 	s.Patch("/:id/comments/:commentId", h.rbac.Protected(), h.editComment)
+
+	s.Get("/:id/chats", h.rbac.Protected(), h.listChats)
+	s.Post("/:id/chats", h.rbac.Protected(), h.createChat)
 }
 
 // --- sessions ---------------------------------------------------------------
@@ -191,6 +195,9 @@ func (h *sessionHandler) list(c fiber.Ctx) error {
 	}
 	if resp.Campaigns == nil {
 		resp.Campaigns = map[string]dtos.SessionCampaignRef{}
+	}
+	if resp.Membership == nil {
+		resp.Membership = map[string]dtos.SessionMembership{}
 	}
 	return c.Status(fiber.StatusOK).JSON(resp)
 }
@@ -634,5 +641,21 @@ func (h *sessionHandler) editComment(c fiber.Ctx) error { return c.SendStatus(fi
 // @Security     CookieAuth
 // @Router       /v1/sessions/{id}/comments/{commentId} [delete]
 func (h *sessionHandler) deleteComment(c fiber.Ctx) error {
+	return c.SendStatus(fiber.StatusNotImplemented)
+}
+
+func (h *sessionHandler) listChats(c fiber.Ctx) error {
+	items, err := h.chatUC.ListForSession(c.Context(), c.Params("id"), entities.BuildViewerFromCtx(c))
+	if err != nil {
+		h.log.Error().Err(err).Msg("list session chats failed")
+		return handleErr(c, err)
+	}
+	if items == nil {
+		items = []dtos.ChatSummary{}
+	}
+	return c.Status(fiber.StatusOK).JSON(items)
+}
+
+func (h *sessionHandler) createChat(c fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNotImplemented)
 }

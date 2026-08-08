@@ -66,6 +66,7 @@ func (c *HTTPProfileClient) GetBriefs(ctx context.Context, ids []string) (map[st
 		return nil, fmt.Errorf("build profile request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set(internalTokenHeader, c.internalToken)
 
 	resp, err := c.client.Do(req)
 	if err != nil {

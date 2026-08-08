@@ -28,6 +28,7 @@ type SessionRepository interface {
 	List(ctx context.Context, p infrastructure.ListSessionsParams, v *entities.Viewer) ([]dtos.Session, string, error)
 	GetByID(ctx context.Context, id string) (*dtos.Session, error)
 	ListCampaignRefs(ctx context.Context, sessionIDs []string) (map[string]dtos.SessionCampaignRef, error)
+	GetViewerMemberships(ctx context.Context, sessionIDs []string, userID string) (map[string]dtos.SessionMembership, error)
 	Create(ctx context.Context, p *infrastructure.CreateSessionParams) (*dtos.Session, error)
 	Update(ctx context.Context, id string, p *infrastructure.UpdateSessionParams) (*dtos.Session, error)
 	Delete(ctx context.Context, id string) error
@@ -85,4 +86,10 @@ type CampaignRepository interface {
 
 	IsCampaignMember(ctx context.Context, campaignID, userID string) (bool, error)
 	ListPlayers(ctx context.Context, campaignID string) ([]dtos.SessionPlayer, error)
+}
+
+type ChatRepository interface {
+	InitGeneralChat(ctx context.Context, sessionID string, scope dtos.SessionType) error
+	RetireSessionChat(ctx context.Context, sessionID string) error
+	ListSessionChats(ctx context.Context, sessionID, userID string) ([]dtos.ChatSummary, error)
 }

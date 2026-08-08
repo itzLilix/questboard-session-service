@@ -491,6 +491,78 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/campaigns/{id}/sessions/order": {
+            "put": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "campaigns"
+                ],
+                "summary": "Set campaign-session ties order",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Campaign ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Sessions IDs in desired order",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dtos.CampaignSessionTie"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/campaigns/{id}/sessions/{sessionId}": {
             "delete": {
                 "security": [
@@ -581,8 +653,11 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "No Content"
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dtos.CampaignSessionTie"
+                        }
                     },
                     "400": {
                         "description": "Bad Request",
@@ -2848,6 +2923,12 @@ const docTemplate = `{
                         "$ref": "#/definitions/dtos.Session"
                     }
                 },
+                "membership": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/dtos.SessionMembership"
+                    }
+                },
                 "nextCursor": {
                     "type": "string"
                 },
@@ -2858,6 +2939,34 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "dtos.SessionMembership": {
+            "type": "string",
+            "enum": [
+                "master",
+                "player",
+                "kicked",
+                "left",
+                "applicant"
+            ],
+            "x-enum-comments": {
+                "MembershipApplicant": "pending application",
+                "MembershipPlayer": "active seat"
+            },
+            "x-enum-descriptions": [
+                "",
+                "active seat",
+                "",
+                "",
+                "pending application"
+            ],
+            "x-enum-varnames": [
+                "MembershipMaster",
+                "MembershipPlayer",
+                "MembershipKicked",
+                "MembershipLeft",
+                "MembershipApplicant"
+            ]
         },
         "dtos.SessionPlayer": {
             "type": "object",
@@ -3202,9 +3311,6 @@ const docTemplate = `{
             "properties": {
                 "briefDescription": {
                     "type": "string"
-                },
-                "orderIndex": {
-                    "type": "integer"
                 }
             }
         },

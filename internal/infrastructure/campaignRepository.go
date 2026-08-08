@@ -206,7 +206,7 @@ func (r *campaignRepository) GetByID(ctx context.Context, id string) (*dtos.Camp
 	}
 
 	var camp dtos.Campaign
-	if err := scanCampaign(r.db.QueryRow(ctx, selectSQL, selectArgs...), &camp); err != nil {
+	if err := scanCampaign(execFromCtx(ctx, r.db).QueryRow(ctx, selectSQL, selectArgs...), &camp); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -252,7 +252,7 @@ func (r *campaignRepository) Create(ctx context.Context, p *CreateCampaignParams
 	}
 
 	var newID string
-	if err := r.db.QueryRow(ctx, insertSQL, insertArgs...).Scan(&newID); err != nil {
+	if err := execFromCtx(ctx, r.db).QueryRow(ctx, insertSQL, insertArgs...).Scan(&newID); err != nil {
 		return nil, fmt.Errorf("insert campaign: %w", err)
 	}
 
@@ -510,7 +510,7 @@ func (r *campaignRepository) TieSession(ctx context.Context, p *TieSessionParams
 		return fmt.Errorf("build tie session: %w", err)
 	}
 
-	if _, err := r.db.Exec(ctx, insertSQL, args...); err != nil {
+	if _, err := execFromCtx(ctx, r.db).Exec(ctx, insertSQL, args...); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return ErrAlreadyExists
@@ -540,7 +540,7 @@ func (r *campaignRepository) EditTie(ctx context.Context, p *EditTieParams) (*dt
 	}
 
 	var tie dtos.CampaignSessionTie
-	if err := scanCampaignSessionTie(r.db.QueryRow(ctx, updateSQL, args...), &tie); err != nil {
+	if err := scanCampaignSessionTie(execFromCtx(ctx, r.db).QueryRow(ctx, updateSQL, args...), &tie); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -561,7 +561,7 @@ func (r *campaignRepository) UntieSession(ctx context.Context, campaignID, sessi
 		return fmt.Errorf("build untie session: %w", err)
 	}
 
-	cmdTag, err := r.db.Exec(ctx, deleteSQL, args...)
+	cmdTag, err := execFromCtx(ctx, r.db).Exec(ctx, deleteSQL, args...)
 	if err != nil {
 		return fmt.Errorf("untie session: %w", err)
 	}
