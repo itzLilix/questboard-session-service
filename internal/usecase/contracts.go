@@ -92,4 +92,11 @@ type ChatRepository interface {
 	InitGeneralChat(ctx context.Context, sessionID string, scope dtos.SessionType) error
 	RetireSessionChat(ctx context.Context, sessionID string) error
 	ListSessionChats(ctx context.Context, sessionID, userID string) ([]dtos.ChatSummary, error)
+	GetSendPermission(ctx context.Context, chatID, userID string) (bool, error)
+	GetReplySnippet(ctx context.Context, chatID, messageID string) (*dtos.ReplySnippet, error)
+	SaveMessage(ctx context.Context, p *infrastructure.SaveMessageParams) (*dtos.MessagePayload, error)
+	ListMessages(ctx context.Context, p *infrastructure.ListMessagesParams) ([]dtos.MessagePayload, error)
+	AddMembers(ctx context.Context, chatID string, userIDs []string) error
+	AddMembersToGeneral(ctx context.Context, sessionID string, userIDs []string) error
+	GetPermissions(ctx context.Context, chatID, userID string) (*dtos.ChatPermissions, error)
 }

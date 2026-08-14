@@ -592,11 +592,7 @@ func (r *sessionRepository) ListPlayers(ctx context.Context, sessionID string) (
 }
 
 func (r *sessionRepository) Join(ctx context.Context, sessionID, playerID string) error {
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin join tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
+	tx := execFromCtx(ctx, r.db)
 
 	// 1. Lock the session row; read capacity input. FOR UPDATE serializes joiners.
 	lockSQL, lockArgs, err := r.psql.
@@ -693,7 +689,7 @@ func (r *sessionRepository) Join(ctx context.Context, sessionID, playerID string
 		return fmt.Errorf("sync free_seats: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (r *sessionRepository) AddPlayers(ctx context.Context, sessionID string, playerIDs []string) error {
@@ -701,11 +697,7 @@ func (r *sessionRepository) AddPlayers(ctx context.Context, sessionID string, pl
 		return nil
 	}
 
-	tx, err := r.db.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin add players tx: %w", err)
-	}
-	defer tx.Rollback(ctx)
+	tx := execFromCtx(ctx, r.db)
 
 	// 1. Lock the session; read capacity input.
 	lockSQL, lockArgs, err := r.psql.
@@ -778,7 +770,7 @@ func (r *sessionRepository) AddPlayers(ctx context.Context, sessionID string, pl
 		return fmt.Errorf("sync free_seats: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (r *sessionRepository) Leave(ctx context.Context, sessionID, playerID string) error {

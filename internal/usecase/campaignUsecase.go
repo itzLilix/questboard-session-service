@@ -316,7 +316,7 @@ func (uc *campaignUsecase) TieSession(ctx context.Context, campaignID string, in
 	err = uc.txManager.WithTx(ctx, func(ctx context.Context) error {
 		err = uc.repo.TieSession(ctx, params)
 		if err != nil {
-			return mapRepoErr("tie session", err)
+			return err
 		}
 		return uc.chatRepo.RetireSessionChat(ctx, in.SessionID)
 	})

@@ -340,3 +340,14 @@ func validateEditTie(in *EditTieInput) error {
 	}
 	return nil
 }
+
+func validatePublishable(session *dtos.Session) error {
+	if session.Format == dtos.Offline && (session.Location == nil || session.Location.Address == "") {
+		return fmt.Errorf("%w: offline sessions require an address before publish", ErrInvalidData)
+	}
+
+	if session.ScheduledAt == nil || session.ScheduledAt.IsZero() || session.ScheduledAt.Before(time.Now()) {
+		return fmt.Errorf("%w: sessions require a scheduledAt date before publish", ErrInvalidData)
+	}
+	return nil
+}

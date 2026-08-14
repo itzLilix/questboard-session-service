@@ -73,4 +73,11 @@ type SessionUsecase interface {
 
 type ChatUsecase interface {
 	ListForSession(ctx context.Context, sessionID string, v *entities.Viewer) ([]dtos.ChatSummary, error)
+	ListMessages(ctx context.Context, in *uc.ListMessagesInput, v *entities.Viewer) (*dtos.MessagePage, error)
+	SendMessage(ctx context.Context, in uc.SendMessageInput, v *entities.Viewer) (*dtos.MessagePayload, error)
+	EditMessage(ctx context.Context, in uc.EditMessageInput, v *entities.Viewer) (*dtos.MessagePayload, error)
+	SetPinned(ctx context.Context, chatID, messageID string, pinned bool, v *entities.Viewer) (*dtos.PinPayload, error)
+	MarkRead(ctx context.Context, chatID, lastReadMessageID string, v *entities.Viewer) (*dtos.ReadPayload, error)
+	ListReadState(ctx context.Context, chatID string, v *entities.Viewer) ([]dtos.ReadPayload, error)
+	GetPermissions(ctx context.Context, chatID string, v *entities.Viewer) (*dtos.ChatPermissions, error)
 }

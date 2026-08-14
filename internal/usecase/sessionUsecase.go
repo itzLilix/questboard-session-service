@@ -250,9 +250,8 @@ func (uc *sessionUsecase) Create(ctx context.Context, in SessionInput, v *entiti
 		}
 		return uc.chatRepo.InitGeneralChat(ctx, s.Id, s.Type)
 	})
-	//s, err := uc.repo.Create(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("create session: %w: %v", ErrInternal, err)
+		return nil, mapRepoErr("create session tx", err)
 	}
 	return s, nil
 }
@@ -387,9 +386,9 @@ func (uc *sessionUsecase) ChangeStatus(ctx context.Context, id string, v *entiti
 			return nil, ErrInvalidStatus
 	}
 
-	if status == dtos.Published && existing.Format == dtos.Offline {
-		if existing.Location == nil || existing.Location.Address == "" {
-			return nil, fmt.Errorf("%w: offline sessions require an address before publish", ErrInvalidData)
+	if status == dtos.Published{
+		if err := validatePublishable(existing); err != nil{
+			return nil, err
 		}
 	}
 
@@ -479,10 +478,18 @@ func (uc *sessionUsecase) Join(ctx context.Context, sessionID string, v *entitie
 
 	//check players existence
 
-	err = uc.repo.Join(ctx, sessionID, v.UserID)
+	err = uc.txManager.WithTx(ctx, func(ctx context.Context) error {
+		var err error
+		err = uc.repo.Join(ctx, sessionID, v.UserID)
+		if err != nil {
+			return err
+		}
+		ids := []string{v.UserID} 
+		return uc.chatRepo.AddMembersToGeneral(ctx, sessionID, ids)
+	})
 	if err != nil {
-		return mapRepoErr("join session", err)
-	}
+		return mapRepoErr("join session tx", err)
+	} 
 	return nil
 
 }

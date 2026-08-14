@@ -1,6 +1,6 @@
 package chatws
 
-import "github.com/rs/zerolog/log"
+import "github.com/rs/zerolog"
 
 // Hub keeps track of connected clients grouped by chat room (chatID) and
 // fans out messages to every client in a room. One Hub per process; start
@@ -11,6 +11,8 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 	broadcast  chan *RoomMessage
+
+	log zerolog.Logger
 }
 
 // RoomMessage is an outbound payload destined for every client in a room.
@@ -19,12 +21,13 @@ type RoomMessage struct {
 	Payload []byte // pre-marshaled JSON
 }
 
-func NewHub() *Hub {
+func NewHub(log zerolog.Logger) *Hub {
 	return &Hub{
 		rooms:      make(map[string]map[*Client]bool),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 		broadcast:  make(chan *RoomMessage, 256),
+		log:        log,
 	}
 }
 
@@ -58,7 +61,7 @@ func (h *Hub) Run() {
 					// Slow consumer: don't let one stuck client block the
 					// whole room's broadcast. Drop it; readPump/writePump
 					// will notice the closed channel and clean up.
-					log.Warn().Str("user_id", c.UserID).Str("chat_id", c.ChatID).Msg("chatws: dropping slow client")
+					h.log.Warn().Str("user_id", c.viewer.UserID).Str("chat_id", c.ChatID).Msg("chatws: dropping slow client")
 					go func(c *Client) { h.unregister <- c }(c)
 				}
 			}
@@ -71,4 +74,21 @@ func (h *Hub) Run() {
 // without reaching into the channel directly.
 func (h *Hub) Publish(chatID string, payload []byte) {
 	h.broadcast <- &RoomMessage{ChatID: chatID, Payload: payload}
+}
+
+// PublishEvent is the one-call version of Publish for REST handlers: it
+// wraps payload in the OutgoingEvent envelope and publishes it. This is
+// what a mutating REST endpoint should call right after its usecase call
+// succeeds — call it once per request, and only from the transport layer
+// that received the request, never from inside the usecase itself (a
+// websocket-originated change already broadcasts via Client, so if the
+// usecase also published, it would double-broadcast for that path).
+func (h *Hub) PublishEvent(chatID string, eventType Event, payload any) error {
+	full, err := MarshalEvent(chatID, eventType, payload)
+	if err != nil {
+		h.log.Error().Err(err).Str("chat_id", chatID).Msg("chatws: failed to marshal event")
+		return err
+	}
+	h.Publish(chatID, full)
+	return nil
 }

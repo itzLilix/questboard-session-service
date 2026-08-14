@@ -89,12 +89,15 @@ func main() {
 
 	v1 := app.Group("/v1")
 
-	handlers.NewChatHandler(chatUsecase, rbacMiddleware, log.Logger, chatws.NewHub()).RegisterRoutes(v1)
+	hub := chatws.NewHub(log.Logger)
+	go hub.Run()
+	chatws.RegisterRoutes(v1, hub, chatUsecase, rbacMiddleware)
+
+	handlers.NewChatHandler(chatUsecase, rbacMiddleware, log.Logger, hub).RegisterRoutes(v1)
 	handlers.NewGameSystemsHandler(gameSystemsUsecase, log.Logger, rbacMiddleware).RegisterRoutes(v1)
 	handlers.NewSessionHandler(sessionUsecase, chatUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
 	handlers.NewCampaignHandler(campaignUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
 	handlers.NewCharacterHandler(characterUsecase, rbacMiddleware, log.Logger).RegisterRoutes(v1)
-	//chatws.RegisterRoutes(app, chatws.NewHub(log.Logger), chatRepo, chatUsecase, chatUsecase, log.Logger)
 
 	go func() {
 		if err := app.Listen(":" + cfg.ServerPort); err != nil {
