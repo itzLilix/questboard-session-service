@@ -33,6 +33,7 @@ func (h *chatHandler) RegisterRoutes(app fiber.Router) {
 	chats.Get("/:chatId", h.getChat)
 
     chats.Get("/:chatId/messages", h.listMessages)
+    chats.Get("/:chatId/messages/:messageId", h.getMessage)
     chats.Post("/:chatId/messages", h.sendMessage)
 
     chats.Patch("/:chatId/messages/:messageId", h.editMessage)
@@ -126,6 +127,19 @@ func (h *chatHandler) listMessages(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(page)
 }
 
+func (h *chatHandler) getMessage(c fiber.Ctx) error {
+	chatID := c.Params("chatId")
+	messageId := c.Params("messageId")
+
+	message, err := h.uc.GetMessageById(c.Context(), chatID, messageId, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		h.log.Error().Err(err).Str("chat_id", chatID).Msg("get message failed")
+		return handleErr(c, err)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(message)
+}
+
 func (h *chatHandler) sendMessage(c fiber.Ctx) error {
 	var req SendMessageRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -162,7 +176,17 @@ func (h *chatHandler) listMembers(c fiber.Ctx) error { return c.SendStatus(fiber
 func (h *chatHandler) addMembers(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
 func (h *chatHandler) removeMember(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
 func (h *chatHandler) ChangeRole(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
-func (h *chatHandler) listPins(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
+func (h *chatHandler) listPins(c fiber.Ctx) error { 
+	chatID := c.Params("chatId")
+	
+	pins, err := h.uc.ListPinned(c.Context(), chatID, entities.BuildViewerFromCtx(c))
+	if err != nil {
+		h.log.Error().Err(err).Str("chat_id", chatID).Msg("list pins failed")
+		return handleErr(c, err)
+	}
+
+	return c.Status(fiber.StatusOK).JSON(pins)
+}
 func (h *chatHandler) pin(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
 func (h *chatHandler) unpin(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }
 func (h *chatHandler) markRead(c fiber.Ctx) error { return c.SendStatus(fiber.StatusNotImplemented) }

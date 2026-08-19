@@ -29,6 +29,8 @@ func mapRepoErr(op string, err error) error {
 	if err == nil {
 		return nil
 	}
+		fmt.Println(err)
+
 	if errors.Is(err, infrastructure.ErrAlreadyExists) {
 		return ErrConflict
 	}

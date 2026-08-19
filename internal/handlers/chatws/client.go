@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/contrib/v3/websocket"
 	"github.com/itzLilix/questboard-session-service/internal/entities"
 	"github.com/itzLilix/questboard-session-service/internal/usecase"
+	"github.com/itzLilix/questboard-shared/dtos"
 )
 
 const (
@@ -95,8 +96,6 @@ func (c *Client) readPump() {
 			}
 			return
 		}
-	fmt.Println(in.ClientNonce)
-
 
 		switch in.Type {
 		case EventMessage:
@@ -109,6 +108,8 @@ func (c *Client) readPump() {
 			c.handlePin(in, false)
 		case EventRead:
 			c.handleRead(in)
+		case EventDelete:
+			c.handleDelete(in)
 		default:
 			// unknown/future type — ignore rather than kill the connection
 		}
@@ -116,7 +117,6 @@ func (c *Client) readPump() {
 }
 
 func (c *Client) handleMessage(in IncomingMessage) {
-	fmt.Println(in.ClientNonce)
 	if in.Body == "" && len(in.Attachments) == 0 {
 		return // no bare-empty messages
 	}
@@ -206,6 +206,21 @@ func (c *Client) handleRead(in IncomingMessage) {
 	// seen-by lists possible on the client side (see MarkRead doc) —
 	// worth keeping at this member scale, unlike in a large chat.
 	c.broadcastEvent(EventRead, payload)
+}
+
+func (c *Client) handleDelete(in IncomingMessage) {
+	fmt.Println(in)
+	if in.MessageID == "" {
+		return
+	}
+
+	err := c.uc.DeleteMessage(c.ctx, c.ChatID, in.MessageID, c.viewer)
+	if err != nil {
+		c.hub.log.Error().Err(err).Str("user_id", c.viewer.UserID).Str("chat_id", c.ChatID).Msg("chatws: delete failed")
+		return
+	}
+
+	c.broadcastEvent(EventDelete, &dtos.DeletePayload{MessageID: in.MessageID})
 }
 
 func (c *Client) broadcastEvent(eventType Event, payload any) {

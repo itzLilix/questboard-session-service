@@ -45,6 +45,7 @@ const (
 	EventPin     Event = "pin"
 	EventUnpin   Event = "unpin"
 	EventRead    Event = "read"
+	EventDelete  Event = "delete"
 )
 
 // MarshalEvent builds the OutgoingEvent envelope bytes for a payload.

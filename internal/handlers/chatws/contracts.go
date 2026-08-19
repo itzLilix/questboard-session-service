@@ -59,4 +59,6 @@ type Usecase interface {
 	// IsCampaignMember/IsPlayer + chat_members-fallback rules already
 	// built for this app, reduced to one yes/no for a given chatID.
 	CanAccessChat(ctx context.Context, chatID string, v *entities.Viewer) (bool, error)
+
+	DeleteMessage(ctx context.Context, chatID, messageID string, v *entities.Viewer) (error)
 }

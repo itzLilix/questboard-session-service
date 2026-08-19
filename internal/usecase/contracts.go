@@ -95,8 +95,14 @@ type ChatRepository interface {
 	GetSendPermission(ctx context.Context, chatID, userID string) (bool, error)
 	GetReplySnippet(ctx context.Context, chatID, messageID string) (*dtos.ReplySnippet, error)
 	SaveMessage(ctx context.Context, p *infrastructure.SaveMessageParams) (*dtos.MessagePayload, error)
+	GetMessageByID(ctx context.Context, chatID, messageID string) (*dtos.MessagePayload, error)
 	ListMessages(ctx context.Context, p *infrastructure.ListMessagesParams) ([]dtos.MessagePayload, error)
 	AddMembers(ctx context.Context, chatID string, userIDs []string) error
 	AddMembersToGeneral(ctx context.Context, sessionID string, userIDs []string) error
 	GetPermissions(ctx context.Context, chatID, userID string) (*dtos.ChatPermissions, error)
+	GetMessageOwner(ctx context.Context, chatID, messageID string) (string, error)
+	EditMessage(ctx context.Context, in *infrastructure.EditMessageParams) (*dtos.MessagePayload, error)
+	ListPinned(ctx context.Context, chatID string) ([]dtos.PinPayload, error)
+	SetPinned(ctx context.Context, chatID, messageID string, pinned bool, actorID string) (*dtos.PinPayload, error)
+	DeleteMessage(ctx context.Context, chatID, messageID string) error
 }

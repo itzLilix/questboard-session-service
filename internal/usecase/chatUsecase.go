@@ -45,6 +45,17 @@ type EditMessageInput struct {
 	MentionedUserIDs []string
 }
 
+type ListMessagesInput struct {
+	ChatID string
+	Before *string
+	Limit  int
+}
+
+const (
+	defaultMessagesLimit = 50
+	maxMessagesLimit     = 100
+)
+
 func (uc *chatUsecase) CanAccessChat(ctx context.Context, chatID string, v *entities.Viewer) (bool, error) {return true, nil}
 
 func (uc *chatUsecase) ListForSession(ctx context.Context, sessionID string, v *entities.Viewer) ([]dtos.ChatSummary, error) {
@@ -78,17 +89,6 @@ func (uc *chatUsecase) ListForSession(ctx context.Context, sessionID string, v *
 		items = []dtos.ChatSummary{}
 	}
 	return items, nil
-}
-
-const (
-	defaultMessagesLimit = 50
-	maxMessagesLimit     = 100
-)
-
-type ListMessagesInput struct {
-	ChatID string
-	Before *string
-	Limit  int
 }
 
 func (uc *chatUsecase) ListMessages(ctx context.Context, in *ListMessagesInput, v *entities.Viewer) (*dtos.MessagePage, error) {
@@ -141,6 +141,26 @@ func (uc *chatUsecase) ListMessages(ctx context.Context, in *ListMessagesInput, 
 	return page, nil
 }
 
+func (uc *chatUsecase) GetMessageById(ctx context.Context, chatID, messageId string, v *entities.Viewer) (*dtos.MessagePayload, error) {
+	if !v.IsAuthenticated() {
+		return nil, ErrUnauthorized
+	}
+
+	allowed, err := uc.CanAccessChat(ctx, chatID, v)
+	if err != nil {
+		return nil, fmt.Errorf("check chat access: %w", err)
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
+
+	payload, err := uc.chatRepo.GetMessageByID(ctx, chatID, messageId)
+	if err != nil {
+		return nil, mapRepoErr("get message", err)
+	}
+	return payload, nil
+}
+
 func (uc *chatUsecase) SendMessage(ctx context.Context, in SendMessageInput, v *entities.Viewer) (*dtos.MessagePayload, error) {
 	if !v.IsAuthenticated() {
 		return nil, ErrUnauthorized
@@ -188,8 +208,6 @@ func (uc *chatUsecase) SendMessage(ctx context.Context, in SendMessageInput, v *
 	return payload, nil
 }
 
-func (uc *chatUsecase) EditMessage(ctx context.Context, in EditMessageInput, v *entities.Viewer) (*dtos.MessagePayload, error) {return nil, nil}
-func (uc *chatUsecase) SetPinned(ctx context.Context, chatID, messageID string, pinned bool, v *entities.Viewer) (*dtos.PinPayload, error) {return nil, nil}
 func (uc *chatUsecase) MarkRead(ctx context.Context, chatID, lastReadMessageID string, v *entities.Viewer) (*dtos.ReadPayload, error) {return nil, nil}
 func (uc *chatUsecase) ListReadState(ctx context.Context, chatID string, v *entities.Viewer) ([]dtos.ReadPayload, error) {return nil, nil}
 
@@ -202,4 +220,101 @@ func (uc *chatUsecase) GetPermissions(ctx context.Context, chatID string, v *ent
 		return nil, mapRepoErr("get permissions", err)
 	}
 	return perms, nil
+}
+
+func (uc *chatUsecase) EditMessage(ctx context.Context, in EditMessageInput, v *entities.Viewer) (*dtos.MessagePayload, error) {
+	if !v.IsAuthenticated() {
+		return nil, ErrUnauthorized
+	}
+	if strings.TrimSpace(in.Body) == "" {
+		return nil, ErrInvalidData
+	}
+
+	senderID, err := uc.chatRepo.GetMessageOwner(ctx, in.ChatID, in.MessageID)
+	if err != nil {
+		return nil, mapRepoErr("get message owner", err)
+	}
+	if senderID != v.UserID {
+		return nil, ErrForbidden
+	}
+
+	payload, err := uc.chatRepo.EditMessage(ctx, &infrastructure.EditMessageParams{
+		ChatID:           in.ChatID,
+		MessageID:        in.MessageID,
+		Body:             in.Body,
+		MentionedUserIDs: in.MentionedUserIDs,
+	})
+	if err != nil {
+		return nil, mapRepoErr("edit message", err)
+	}
+	return payload, nil
+}
+
+func (uc *chatUsecase) ListPinned(ctx context.Context, chatID string, v *entities.Viewer) ([]dtos.PinPayload, error) {
+	if !v.IsAuthenticated() {
+		return nil, ErrUnauthorized
+	}
+
+	allowed, err := uc.CanAccessChat(ctx, chatID, v)
+	if err != nil {
+		return nil, fmt.Errorf("check chat access: %w", err)
+	}
+	if !allowed {
+		return nil, ErrForbidden
+	}
+
+	items, err := uc.chatRepo.ListPinned(ctx, chatID)
+	if err != nil {
+		return nil, mapRepoErr("list pinned messages", err)
+	}
+	if items == nil {
+		items = []dtos.PinPayload{}
+	}
+	return items, nil
+}
+
+func (uc *chatUsecase) SetPinned(ctx context.Context, chatID, messageID string, pinned bool, v *entities.Viewer) (*dtos.PinPayload, error) {
+	if !v.IsAuthenticated() {
+		return nil, ErrUnauthorized
+	}
+
+	perms, err := uc.chatRepo.GetPermissions(ctx, chatID, v.UserID)
+	if err != nil {
+		return nil, mapRepoErr("get permissions", err)
+	}
+	if !perms.CanPinMessages {
+		return nil, ErrForbidden
+	}
+
+	payload, err := uc.chatRepo.SetPinned(ctx, chatID, messageID, pinned, v.UserID)
+	if err != nil {
+		return nil, mapRepoErr("set pinned", err)
+	}
+	return payload, nil
+}
+
+func (uc *chatUsecase) DeleteMessage(ctx context.Context, chatID, messageID string, v *entities.Viewer) error {
+	if !v.IsAuthenticated() {
+		return ErrUnauthorized
+	}
+
+	senderID, err := uc.chatRepo.GetMessageOwner(ctx, chatID, messageID)
+	if err != nil {
+		return mapRepoErr("get message owner", err)
+	}
+
+	if senderID != v.UserID {
+		perms, err := uc.chatRepo.GetPermissions(ctx, chatID, v.UserID)
+		if err != nil {
+			return mapRepoErr("get permissions", err)
+		}
+		if !perms.CanDeleteMessages {
+			return ErrForbidden
+		}
+	}
+
+	if err := uc.chatRepo.DeleteMessage(ctx, chatID, messageID); err != nil {
+		return mapRepoErr("delete message", err)
+	}
+	return nil
 }

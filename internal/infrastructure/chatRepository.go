@@ -40,6 +40,13 @@ type ListMessagesParams struct {
 	Limit  int
 }
 
+type EditMessageParams struct {
+	ChatID           string
+	MessageID        string
+	Body             string
+	MentionedUserIDs []string
+}
+
 func (r *chatRepository) InitGeneralChat(ctx context.Context, roomID string, scope dtos.SessionType) error {
 	var (
 		scopeCol string
@@ -526,6 +533,89 @@ func (r *chatRepository) ListMessages(ctx context.Context, p *ListMessagesParams
 	return out, nil
 }
 
+func (r *chatRepository) GetMessageByID(ctx context.Context, chatID, messageID string) (*dtos.MessagePayload, error) {
+	qb := r.psql.
+		Select(
+			"m.id", "m.sender_id", "m.body", "m.created_at", "m.edited_at",
+			"r.id", "r.sender_id", "r.deleted_at",
+			"CASE WHEN r.deleted_at IS NULL THEN LEFT(r.body, 200) END",
+		).
+		From("messages m").
+		LeftJoin("messages r ON r.id = m.reply_to_id").
+		Where(sq.Eq{
+			"m.id":         messageID,
+			"m.deleted_at": nil,
+			"m.chat_id": chatID,
+		})
+
+	query, args, err := qb.ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build get message query: %w", err)
+	}
+
+	var s struct {
+		id, senderID, body   string
+		createdAt            time.Time
+		editedAt             *time.Time
+		replyID, replySender *string
+		replyDeletedAt       *time.Time
+		replyPreview         *string
+	}
+
+	err = r.db.QueryRow(ctx, query, args...).Scan(
+		&s.id,
+		&s.senderID,
+		&s.body,
+		&s.createdAt,
+		&s.editedAt,
+		&s.replyID,
+		&s.replySender,
+		&s.replyDeletedAt,
+		&s.replyPreview,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get message: %w", err)
+	}
+
+	attByMsg, err := r.batchAttachments(ctx, []string{s.id})
+	if err != nil {
+		return nil, err
+	}
+
+	mentionsByMsg, err := r.batchMentions(ctx, []string{s.id})
+	if err != nil {
+		return nil, err
+	}
+
+	payload := &dtos.MessagePayload{
+		ID:               s.id,
+		SenderID:         s.senderID,
+		Body:             s.body,
+		Attachments:      attByMsg[s.id],
+		MentionedUserIDs: mentionsByMsg[s.id],
+		CreatedAt:        s.createdAt,
+		EditedAt:         s.editedAt,
+	}
+
+	if s.replyID != nil {
+		payload.ReplyTo = &dtos.ReplySnippet{
+			MessageID: *s.replyID,
+			SenderID:  *s.replySender,
+			Deleted:   s.replyDeletedAt != nil,
+		}
+
+		if s.replyPreview != nil {
+			payload.ReplyTo.ContentPreview = *s.replyPreview
+		}
+	}
+
+	return payload, nil
+}
+
+
 func (r *chatRepository) batchAttachments(ctx context.Context, messageIDs []string) (map[string][]dtos.Attachment, error) {
 	query, args, err := r.psql.
 		Select("message_id", "id", "name", "url", "mime_type", "size_bytes").
@@ -677,4 +767,276 @@ func (r *chatRepository) GetPermissions(ctx context.Context, chatID, userID stri
 		return nil, fmt.Errorf("query permissions: %w", err)
 	}
 	return &p, nil
+}
+
+// GetMessageOwner returns a message's sender. Soft-deleted messages are
+// treated as not found — they never leave the backend, but callers acting
+// on a message (edit, delete, pin) should see the same "gone" result as
+// if the row didn't exist.
+func (r *chatRepository) GetMessageOwner(ctx context.Context, chatID, messageID string) (string, error) {
+	query, args, err := r.psql.
+		Select("sender_id").
+		From("messages").
+		Where(sq.Eq{"id": messageID, "chat_id": chatID}).
+		Where("deleted_at IS NULL").
+		ToSql()
+	if err != nil {
+		return "", fmt.Errorf("build get message owner query: %w", err)
+	}
+
+	var senderID string
+	if err := r.db.QueryRow(ctx, query, args...).Scan(&senderID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrNotFound
+		}
+		return "", fmt.Errorf("query message owner: %w", err)
+	}
+	return senderID, nil
+}
+
+func (r *chatRepository) EditMessage(ctx context.Context, in *EditMessageParams) (*dtos.MessagePayload, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) // no-op once committed
+
+	updateMsg, args, err := r.psql.
+		Update("messages").
+		Set("body", in.Body).
+		Set("edited_at", sq.Expr("NOW()")).
+		Where(sq.Eq{"id": in.MessageID, "chat_id": in.ChatID}).
+		Where("deleted_at IS NULL").
+		Suffix("RETURNING sender_id, created_at, edited_at, reply_to_id").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build update message query: %w", err)
+	}
+
+	var (
+		senderID  string
+		createdAt time.Time
+		editedAt  *time.Time
+		replyToID *string
+	)
+	if err := tx.QueryRow(ctx, updateMsg, args...).Scan(&senderID, &createdAt, &editedAt, &replyToID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("update message: %w", err)
+	}
+
+	delMentions, args, err := r.psql.
+		Delete("message_mentions").
+		Where(sq.Eq{"message_id": in.MessageID}).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build delete mentions query: %w", err)
+	}
+	if _, err := tx.Exec(ctx, delMentions, args...); err != nil {
+		return nil, fmt.Errorf("delete mentions: %w", err)
+	}
+
+	if len(in.MentionedUserIDs) > 0 {
+		mentionBuilder := r.psql.Insert("message_mentions").Columns("message_id", "mentioned_user_id")
+		for _, uid := range in.MentionedUserIDs {
+			mentionBuilder = mentionBuilder.Values(in.MessageID, uid)
+		}
+		q, args, err := mentionBuilder.ToSql()
+		if err != nil {
+			return nil, fmt.Errorf("build insert mentions query: %w", err)
+		}
+		if _, err := tx.Exec(ctx, q, args...); err != nil {
+			return nil, fmt.Errorf("insert mentions: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
+	}
+
+	attByMsg, err := r.batchAttachments(ctx, []string{in.MessageID})
+	if err != nil {
+		return nil, err
+	}
+
+	var replyTo *dtos.ReplySnippet
+	if replyToID != nil {
+		replyTo, err = r.GetReplySnippet(ctx, in.ChatID, *replyToID)
+		if err != nil {
+			return nil, fmt.Errorf("get reply snippet: %w", err)
+		}
+	}
+
+	return &dtos.MessagePayload{
+		ID:               in.MessageID,
+		SenderID:         senderID,
+		Body:             in.Body,
+		ReplyTo:          replyTo,
+		Attachments:      attByMsg[in.MessageID],
+		MentionedUserIDs: in.MentionedUserIDs,
+		CreatedAt:        createdAt,
+		EditedAt:         editedAt,
+	}, nil
+}
+
+func (r *chatRepository) ListPinned(ctx context.Context, chatID string) ([]dtos.PinPayload, error) {
+	query, args, err := r.psql.
+		Select(
+			"message_id",
+			"pinned_by", "pinned_at", "order_index",
+		).
+		From("pinned_messages").
+		Where(sq.Eq{"chat_id": chatID}).
+		OrderBy("order_index NULLS LAST", "pinned_at DESC").
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build list pinned query: %w", err)
+	}
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query pinned messages: %w", err)
+	}
+	defer rows.Close()
+
+	type scanned struct {
+		id   		string
+		pinnedBy    string
+		pinnedAt    time.Time
+		orderIndex  *int16
+	}
+
+	var scannedRows []scanned
+	for rows.Next() {
+		var s scanned
+		if err := rows.Scan(&s.id,
+			&s.pinnedBy, &s.pinnedAt, &s.orderIndex); err != nil {
+			return nil, fmt.Errorf("scan pinned message row: %w", err)
+		}
+		scannedRows = append(scannedRows, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pinned message rows: %w", err)
+	}
+	if len(scannedRows) == 0 {
+		return []dtos.PinPayload{}, nil
+	}
+
+	out := make([]dtos.PinPayload, len(scannedRows))
+	for i, s := range scannedRows {
+		out[i] = dtos.PinPayload{
+			MessageID: s.id,
+			PinnedBy: s.pinnedBy,
+			PinnedAt: s.pinnedAt,
+			OrderIndex: s.orderIndex,
+		}
+	}
+	return out, nil
+}
+
+func (r *chatRepository) SetPinned(ctx context.Context, chatID, messageID string, pinned bool, actorID string) (*dtos.PinPayload, error) {
+	db := execFromCtx(ctx, r.db)
+
+	if !pinned {
+		query, args, err := r.psql.
+			Delete("pinned_messages").
+			Where(sq.Eq{"message_id": messageID, "chat_id": chatID}).
+			ToSql()
+		if err != nil {
+			return nil, fmt.Errorf("build unpin query: %w", err)
+		}
+		tag, err := db.Exec(ctx, query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("unpin message: %w", err)
+		}
+		if tag.RowsAffected() == 0 {
+			return nil, ErrNotFound
+		}
+		return &dtos.PinPayload{MessageID: messageID}, nil
+	}
+
+	// INSERT ... SELECT guards existence and non-deletion in one round
+	// trip instead of a separate SELECT first: if the message doesn't
+	// exist, isn't in this chat, or is soft-deleted, EXISTS is false,
+	// the SELECT yields no row, nothing is inserted, and the RETURNING
+	// scan below comes back empty — same ErrNotFound path used by
+	// EditMessage/DeleteMessage.
+	src := r.psql.
+		Select().
+		Column("? AS chat_id", chatID).
+		Column("? AS message_id", messageID).
+		Column("? AS pinned_by", actorID).
+		Where("EXISTS (SELECT 1 FROM messages WHERE id = ? AND chat_id = ? AND deleted_at IS NULL)",
+			messageID, chatID)
+
+	query, args, err := r.psql.
+		Insert("pinned_messages").
+		Columns("chat_id", "message_id", "pinned_by").
+		Select(src).
+		Suffix(`
+			ON CONFLICT (message_id) DO UPDATE
+				SET pinned_by = EXCLUDED.pinned_by, pinned_at = NOW()
+			RETURNING pinned_by, pinned_at
+		`).
+		ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("build pin message query: %w", err)
+	}
+
+	var pinnedBy string
+	var pinnedAt time.Time
+	if err := db.QueryRow(ctx, query, args...).Scan(&pinnedBy, &pinnedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("pin message: %w", err)
+	}
+
+	return &dtos.PinPayload{MessageID: messageID, PinnedBy: pinnedBy, PinnedAt: pinnedAt}, nil
+}
+
+func (r *chatRepository) DeleteMessage(ctx context.Context, chatID, messageID string) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) // no-op once committed
+
+	query, args, err := r.psql.
+		Update("messages").
+		Set("deleted_at", sq.Expr("NOW()")).
+		Where(sq.Eq{"id": messageID, "chat_id": chatID}).
+		Where("deleted_at IS NULL").
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build delete message query: %w", err)
+	}
+
+	tag, err := tx.Exec(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("delete message: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	// Soft delete doesn't trigger pinned_messages' ON DELETE CASCADE (that
+	// only fires on a hard DELETE FROM messages), so a deleted message
+	// left pinned would silently linger. Unpin explicitly.
+	unpinQuery, unpinArgs, err := r.psql.
+		Delete("pinned_messages").
+		Where(sq.Eq{"message_id": messageID}).
+		ToSql()
+	if err != nil {
+		return fmt.Errorf("build unpin-on-delete query: %w", err)
+	}
+	if _, err := tx.Exec(ctx, unpinQuery, unpinArgs...); err != nil {
+		return fmt.Errorf("unpin on delete: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+	return nil
 }
